@@ -1,0 +1,15 @@
+{
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter"
+    },
+    "terminal.integrated.defaultProfile.windows": "QGIS Python CMD",
+    "terminal.integrated.profiles.windows": {
+      "QGIS Python CMD": {
+        "path": "cmd.exe",
+        "args": [
+          "/k",
+          "call .\\.vscode\\activate_qgis_python.bat"
+        ]
+      }
+    }  
+}

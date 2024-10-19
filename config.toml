@@ -1,0 +1,13 @@
+horizonte = 12
+rodales = 7
+
+[random]
+seed = 4 # random number generator seed
+# min, max
+edades = [1, 18]
+has = [5, 15]
+# min, max, step
+podas = [5, 15, 5]
+raleos = [6, 12, 2]
+cosechas = [8, 30, 4]
+

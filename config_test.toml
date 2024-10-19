@@ -1,0 +1,30 @@
+horizonte = 10
+rodales = 36
+[datos]
+w = 6 # ancho matriz 
+h = 6 # alto matriz
+xllcorner = 457900 # punto georeferencial x
+yllcorner=5716800 # punto georeferencial x
+ellsize=100 
+nodata_value=-9999
+
+[random]
+seed = 4 # random number generator seed
+# min, max
+edades = [1, 18]
+has = [5, 15]
+# min, max, step
+[pino]
+podas = [5, 15, 5]
+raleos = [6, 11,1]
+cosechas = [18, 29, 1]
+[eucalyptus]
+cosechas = [8, 13,1]
+[opti]
+Price = 63000
+tasa = 0.03 
+B = 700
+C = 10
+D = 1
+
+
