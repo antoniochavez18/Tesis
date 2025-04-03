@@ -14,6 +14,7 @@ from post_optimization import (
 )
 from use_of_QGIS import fuels_creation, burn_prob_sol
 
+# Bajar del gorwth simulator.py, auxiliary.py y tabla.csv
 
 config = read_toml("config.toml")  # se lee el archivo de configuracion
 config_opti = read_toml("config_opti.toml")  # se lee el archivo de configuracion de optimizacion
@@ -53,6 +54,7 @@ valores_objetivo, soluciones = model_t(rodales, politicas, prices, "rodales_sin_
 
 valores_objetivo_cf, soluciones_cf = model_t(rodales_cf, politicas, prices, "rodales_con_cortafuegos")
 
+# filtra los datos de los rodales dependiendo de las soluciones (ojo que las soluciones tienen que tener el mismo orden que los rodales)
 filter = filtro(rodales, "soluciones_rodales_sin_cortafuegos.csv")  # f[soluciones][rodales]
 filtro_cf = filtro(rodales_cf, "soluciones_rodales_con_cortafuegos.csv")
 
