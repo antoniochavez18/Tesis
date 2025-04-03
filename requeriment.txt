@@ -1,7 +1,15 @@
-numpy
-sympy
 black
 ipython
 matplotlib
+numpy
 scipy
+sympy
 toml; python_version < '3.11' 
+geopandas
+ast
+pandas 
+sys
+pathlib
+tempfile
+gurobipy
+csv

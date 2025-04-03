@@ -8,22 +8,34 @@ import sys
 if sys.version_info >= (3, 11):
     import tomllib
 
-    with open("config_test.toml", "rb") as f:
+    with open("config.toml", "rb") as f:
         config = tomllib.load(f)
 else:
     import toml
 
     config = toml.load("config.toml")
 
+if sys.version_info >= (3, 11):
+    import tomllib
+
+    with open("config_opti.toml", "rb") as f:
+        config_opti = tomllib.load(f)
+else:
+    import toml
+
+    config_opti = toml.load("config_opti.toml")
+
+
 rng = np.random.default_rng(4)
 
 
-def filtro(rodales):
+def filtro(rodales, csv_soluciones):
+    """filtra los datos de los rodales dependiendo de las distintas soluciones."""
     # Cargamos los datos de los archivos
-    df_soluciones = pd.read_csv("soluciones_x.csv")  # Archivo de soluciones
+    df_soluciones = pd.read_csv(csv_soluciones)  # Archivo de soluciones
 
     # Parámetros
-    RR = config["rodales"]  # Cantidad de rodales
+    RR = len(rodales)  # Cantidad de rodales
 
     # Lista para almacenar las soluciones
     soluciones = []
@@ -39,17 +51,26 @@ def filtro(rodales):
 
             # Inicializamos un diccionario por rodal para almacenar "codigo_kitral" y "vendible"
             rodal_data = {}
+            rodal_data = {
+                "rid": rodales[r]["rid"],
+                "mid": rodales[r]["mid"],
+                "edad_inicial": rodales[r]["edad_inicial"],
+            }
 
             if pol == 0:
                 # Si no hay raleo ni cosecha, usar el primer manejo
                 rodal_data["codigo_kitral"] = rodales[r]["manejos"][0]["codigo_kitral"]
                 rodal_data["vendible"] = rodales[r]["manejos"][0]["vendible"]
+                rodal_data["biomass"] = rodales[r]["manejos"][0]["biomass"]
+                rodal_data["eventos"] = rodales[r]["manejos"][0]["eventos"]
             else:
                 # Buscar el manejo que coincida con la política
                 for m in range(len(rodales[r]["manejos"])):
                     if rodales[r]["manejos"][m]["raleo"] == pol[0] and rodales[r]["manejos"][m]["cosecha"] == pol[1]:
                         rodal_data["codigo_kitral"] = rodales[r]["manejos"][m]["codigo_kitral"]
                         rodal_data["vendible"] = rodales[r]["manejos"][m]["vendible"]
+                        rodal_data["biomass"] = rodales[r]["manejos"][m]["biomass"]
+                        rodal_data["eventos"] = rodales[r]["manejos"][m]["eventos"]
 
             # Guardamos el diccionario de datos del rodal en la solución correspondiente
             solucion[r] = rodal_data
@@ -60,158 +81,8 @@ def filtro(rodales):
     return soluciones
 
 
-def id2xy(idx: int, w: int, h: int) -> tuple[int, int]:
-    """Transform a pixel or cell index, into x,y coordinates.
-    In GIS, the origin is at the top-left corner, read from left to right, top to bottom.  
-    If your're used to matplotlib, the y-axis is inverted.  
-    Also as numpy array, the index of the pixel is [y, x].
-
-    Args:
-        param idx: index of the pixel or cell (0,..,w*h-1)  
-        param w: width of the image or grid  
-        param h: height of the image or grid (not really used!)
-
-    Returns:
-        tuple: (x, y) coordinates of the pixel or cell  
-    """  # fmt: skip
-    return idx % w, idx // w
-
-
-def xy2id(x: int, y: int, w: int) -> int:
-    """Transform a x,y coordinates into a pixel or cell index.
-    In GIS, the origin is at the top-left corner, read from left to right, top to bottom.  
-    If your're used to matplotlib, the y-axis is inverted.  
-    Also as numpy array, the index of the pixel is [y, x].
-
-    Args:
-        param x: width or horizontal coordinate of the pixel or cell  
-        param y: height or vertical coordinate of the pixel or cell  
-        param w: width of the image or grid  
-
-    Returns:
-        int: index of the pixel or cell (0,..,w\*h-1)
-    """  # fmt: skip
-    return y * w + x
-
-
-def lista_a_matriz(lista, w, h):
-    # Crear una matriz vacía de tamaño h (filas) x w (columnas) con tipo 'object' para soportar strings
-    matriz = np.empty((h, w), dtype=int)  # Usamos dtype=object para strings y otros tipos de datos
-
-    # Iterar sobre la lista y colocar cada elemento en su posición en la matriz
-    for idx, valor in enumerate(lista):
-        x, y = id2xy(idx, w, h)  # Obtener las coordenadas (x, y) para el índice
-        matriz[y][x] = valor  # Asignar el valor en la posición correspondiente en la matriz
-
-    return matriz
-
-
-def matriz_cod(soluciones, w, h):
-    RR = config["rodales"]  # Cantidad de rodales
-    periodos = config["horizonte"]
-    matrices = []  # Aquí almacenaremos las matrices organizadas por solución y periodo
-
-    for s in range(len(soluciones)):  # Para cada solución
-        matrices_por_solucion = []  # Lista para matrices de cada solución
-
-        for t in range(periodos):  # Para cada periodo
-            lista_kitral = []  # Lista para almacenar los códigos kitral de todos los rodales en un periodo
-
-            for r in range(RR):  # Para cada rodal
-                # Obtener el código kitral para el rodal 'r' en el periodo 't'
-                lista_kitral.append(soluciones[s][r]["codigo_kitral"][t])
-
-            # Convertir la lista de códigos kitral en una matriz usando la función lista_a_matriz
-            matriz_kitral = lista_a_matriz(lista_kitral, w, h)
-
-            # Almacenar la matriz en la lista correspondiente a la solución actual
-            matrices_por_solucion.append(matriz_kitral)
-
-        # Almacenar la lista de matrices de la solución 's' en la lista principal
-        matrices.append(matrices_por_solucion)
-
-    return matrices  # Devuelve una lista de matrices por solución y periodo
-
-
-def matriz_a_asc(matriz, nombre_archivo, xllcorner=457900, yllcorner=5716800, cellsize=100, nodata_value=-9999):
-    """
-    Función para guardar una matriz como un archivo .asc (ASCII Grid).
-
-    Args:
-    - matriz: numpy array 2D que contiene los valores del grid.
-    - nombre_archivo: el nombre del archivo de salida (incluyendo .asc).
-    - xllcorner: coordenada X de la esquina inferior izquierda (por defecto 0).
-    - yllcorner: coordenada Y de la esquina inferior izquierda (por defecto 0).
-    - cellsize: tamaño de cada celda en el grid (por defecto 1).
-    - nodata_value: valor para las celdas que no contienen datos (por defecto -9999).
-    """
-    nrows, ncols = matriz.shape  # Obtener las dimensiones de la matriz
-
-    with open(nombre_archivo, "w") as f:
-        # Escribir el encabezado del archivo .asc
-        f.write(f"ncols         {ncols}\n")
-        f.write(f"nrows         {nrows}\n")
-        f.write(f"xllcorner     {xllcorner}\n")
-        f.write(f"yllcorner     {yllcorner}\n")
-        f.write(f"cellsize      {cellsize}\n")
-        f.write(f"NODATA_value  {nodata_value}\n")
-
-        # Escribir los valores de la matriz
-        for row in matriz:
-            f.write(" ".join(map(str, row)) + "\n")
-
-
-def leer_matriz_asc(file_path):
-    """Lee un archivo .asc y devuelve su matriz de datos como un array de numpy."""
-    with open(file_path, "r") as file:
-        asc_data = file.readlines()
-
-    # Extraemos las líneas de datos, asumiendo que el encabezado tiene 6 líneas
-    data_start_index = 6
-    matrix_data = asc_data[data_start_index:]
-
-    # Convertimos las líneas en una matriz
-    matrix = [list(map(float, line.split())) for line in matrix_data]
-
-    return np.array(matrix)
-
-
-def leer_matrices_de_carpeta(carpeta_path, num_soluciones, num_periodos):
-    """Lee todos los archivos .asc en la carpeta y organiza las matrices en una lista bidimensional.
-
-    Args:
-        carpeta_path (str): La ruta a la carpeta que contiene los archivos .asc.
-        num_soluciones (int): Número total de soluciones.
-        num_periodos (int): Número total de periodos.
-
-    Returns:
-        list: Lista bidimensional con matrices organizadas como m[solucion][periodo].
-    """
-    # Crear una lista bidimensional para almacenar las matrices
-    matrices = [[None for _ in range(num_periodos)] for _ in range(num_soluciones)]
-
-    # Expresión regular para extraer solucion y periodo de los nombres de los archivos
-    pattern = r"solucion_(\d+)_periodo_(\d+)\.asc"
-
-    # Iterar sobre todos los archivos en la carpeta
-    for filename in os.listdir(carpeta_path):
-        if filename.endswith(".asc"):
-            match = re.search(pattern, filename)
-            if match:
-                solucion = int(match.group(1))
-                periodo = int(match.group(2))
-
-                # Leer la matriz del archivo
-                file_path = os.path.join(carpeta_path, filename)
-                matriz = leer_matriz_asc(file_path)
-
-                # Almacenar la matriz en la lista correspondiente
-                matrices[solucion][periodo] = matriz
-
-    return matrices
-
-
 def multiplicar_listas(bp, filtro):
+    """multiplica las biomasas vendibles por 1 - prob de quema de cada rodal, periodo y solución."""
     soluciones = len(bp)  # Número de soluciones (dimensión s)
     rodales = len(bp[0])  # Número de rodales (dimensión r)
     periodos = len(bp[0][0])  # Número de periodos (dimensión t)
@@ -220,31 +91,603 @@ def multiplicar_listas(bp, filtro):
     resultado = [[[0 for t in range(periodos)] for r in range(rodales)] for s in range(soluciones)]
 
     # Iterar sobre soluciones, rodales y periodos
+    biomasa = [0 for _ in range(periodos)]
+    biomasa_cf = [0 for _ in range(periodos)]
+
     for s in range(soluciones):
         for r in range(rodales):
             for t in range(periodos):
                 # Multiplicar el valor correspondiente de cada lista
-                resultado[s][r][t] = bp[s][r][t] * filtro[s][r]["vendible"][t]
+                resultado[s][r][t] = (1 - bp[s][r][t]) * filtro[s][r]["vendible"][t]
 
     return resultado
 
 
-def sumar_por_solucion(ganancias_totales):
+def sumar_por_solucion(ganancias_totales, prices):
+    """Suma las ganancias totales por solución post incendios."""
     soluciones = len(ganancias_totales)  # Número de soluciones
     rodales = len(ganancias_totales[0])  # Número de rodales
     periodos = len(ganancias_totales[0][0])  # Número de periodos
 
     # Crear una lista para almacenar los totales por solución
     total = [0 for _ in range(soluciones)]
+    vt_por_solucion = [[] for _ in range(soluciones)]  # Almacena los valores v_t por solución
 
     # Iterar sobre soluciones, rodales y periodos para sumar
     for s in range(soluciones):
         suma_solucion = 0  # Inicializamos la suma para cada solución
-        for r in range(rodales):
-            for t in range(periodos):
-                # Sumamos todos los valores en ganancias_totales para la solución s
-                suma_solucion += ganancias_totales[s][r][t]
+        vt = [0 for _ in range(periodos)]  # Valores v_t para la solución actual
+        for t in range(periodos):
+            discount_factor = (1 + config_opti["opti"]["tasa"]) ** t
+            v_t = sum((ganancias_totales[s][r][t] * prices[t]) / discount_factor for r in range(rodales))
+            vt[t] = v_t
+            suma_solucion += v_t
 
         total[s] = suma_solucion  # Guardamos la suma total para la solución s
+        vt_por_solucion[s] = vt  # Guardamos los valores v_t para la solución s
 
-    return total
+    return total, vt_por_solucion
+
+
+def graficar_vt_por_solucion(vt_por_solucion, dataset_name):
+    import matplotlib.pyplot as plt
+
+    periodos = len(vt_por_solucion[0])
+    soluciones = len(vt_por_solucion)
+
+    plt.figure(figsize=(10, 6))
+    for s in range(soluciones):
+        plt.plot(range(periodos), vt_por_solucion[s], marker="o", linestyle="-", label=f"Solución {s + 1}")
+
+    plt.title(f"Valores presentes por período para cada solución post incendios({dataset_name})")
+    plt.xlabel("Períodos")
+    plt.ylabel("v_t (Ventas ajustadas)")
+    plt.legend(title="Soluciones")
+    plt.grid(True)
+    plt.savefig(f"valores_vt_por_solucion_post_fuego_{dataset_name}.png")
+    plt.show()
+
+
+def base_case(rodales):
+    # Cargamos los datos de los archivos
+    # Parámetros
+    RR = len(rodales)  # Cantidad de rodales
+
+    base_case_data = {}
+
+    for r in range(RR):
+        # Inicializamos un diccionario por rodal para almacenar "codigo_kitral" y "vendible"
+        rodal_data = {
+            "rid": rodales[r]["rid"],
+            "mid": rodales[r]["mid"],
+            "edad_inicial": rodales[r]["edad_inicial"],
+            "codigo_kitral": rodales[r]["manejos"][0]["codigo_kitral"],
+            "biomass": rodales[r]["manejos"][0]["biomass"],
+        }
+        # Guardamos el diccionario de datos del rodal en la base_case_data correspondiente
+        base_case_data[r] = rodal_data
+
+    return base_case_data
+
+
+def biomass_with_fire_breacks(rodales, gdf_cf, id="fid"):
+    import copy
+
+    # Crear una copia profunda para evitar modificar el original
+    rodales2 = copy.deepcopy(rodales)
+    periodos = config["horizonte"]
+
+    for r in range(len(rodales)):
+        prop_rodal_no_cf = gdf_cf.loc[gdf_cf[id] == rodales[r]["rid"], "prop_cf"].values[0]
+
+        for t in range(periodos):
+            for m in range(len(rodales[r]["manejos"])):
+                rodales2[r]["manejos"][m]["biomass"][t] = rodales[r]["manejos"][m]["biomass"][t] * (
+                    1 - prop_rodal_no_cf
+                )
+                rodales2[r]["manejos"][m]["vendible"][t] = rodales[r]["manejos"][m]["vendible"][t] * (
+                    1 - prop_rodal_no_cf
+                )
+
+    return rodales2
+
+
+def prop_quemada(filtro, filtro_cf, bp, bp_cf, dataset_name):
+    soluciones = len(bp)  # Número de soluciones
+    rodales = len(bp[0])  # Número de rodales
+    periodos = len(bp[0][0])  # Número de periodos
+
+    # Crear listas para almacenar las proporciones de biomasas quemadas por solución y periodo
+    prop_biomasa_quemada = [[0 for _ in range(periodos)] for _ in range(soluciones)]
+    prop_vendible_quemada = [[0 for _ in range(periodos)] for _ in range(soluciones)]
+    prop_biomasa_quemada_cf = [[0 for _ in range(periodos)] for _ in range(soluciones)]
+    prop_vendible_quemada_cf = [[0 for _ in range(periodos)] for _ in range(soluciones)]
+
+    # Iterar sobre soluciones, rodales y periodos para calcular la proporción de biomasa quemada
+    for s in range(soluciones):
+        for t in range(periodos):
+            total_biomass = sum(filtro[s][r]["biomass"][t] for r in range(rodales))
+            total_vendible = sum(filtro[s][r]["vendible"][t] for r in range(rodales))
+            total_biomass_cf = sum(filtro_cf[s][r]["biomass"][t] for r in range(rodales))
+            total_vendible_cf = sum(filtro_cf[s][r]["vendible"][t] for r in range(rodales))
+
+            if total_biomass > 0:
+                prop_biomasa_quemada[s][t] = (
+                    sum((bp[s][r][t] * filtro[s][r]["biomass"][t]) for r in range(rodales)) / total_biomass
+                )
+            if total_vendible > 0:
+                prop_vendible_quemada[s][t] = (
+                    sum((bp[s][r][t] * filtro[s][r]["vendible"][t]) for r in range(rodales)) / total_vendible
+                )
+            if total_biomass_cf > 0:
+                prop_biomasa_quemada_cf[s][t] = (
+                    sum((bp_cf[s][r][t] * filtro_cf[s][r]["biomass"][t]) for r in range(rodales)) / total_biomass_cf
+                )
+            if total_vendible_cf > 0:
+                prop_vendible_quemada_cf[s][t] = (
+                    sum((bp_cf[s][r][t] * filtro_cf[s][r]["vendible"][t]) for r in range(rodales)) / total_vendible_cf
+                )
+
+    # Graficar la proporción de biomasa quemada por periodo
+    import matplotlib.pyplot as plt
+
+    periodos_range = np.arange(periodos)
+    colors = plt.cm.tab10.colors  # Colores de la gama tab10
+
+    plt.figure(figsize=(10, 6))
+    for s in range(soluciones):
+        plt.plot(
+            periodos_range,
+            prop_biomasa_quemada[s],
+            marker="o",
+            linestyle="-",
+            label=f"Solución {s + 1} sin CF",
+            color=colors[s],
+        )
+        plt.plot(
+            periodos_range,
+            prop_biomasa_quemada_cf[s],
+            marker="^",
+            linestyle="--",
+            label=f"Solución {s + 1} con CF",
+            color=colors[s],
+            markersize=8,
+        )
+
+    plt.title(f"Proporción de biomasa quemada por período para cada solución ({dataset_name})")
+    plt.xlabel("Períodos")
+    plt.ylabel("Proporción de biomasa quemada")
+    plt.legend(title="Soluciones")
+    plt.grid(True)
+    plt.savefig(f"prop_biomasa_quemada_por_solucion_{dataset_name}.png")
+    plt.show()
+
+    # Graficar la proporción de biomasa vendible quemada por periodo
+    plt.figure(figsize=(10, 6))
+    for s in range(soluciones):
+        plt.plot(
+            periodos_range,
+            prop_vendible_quemada[s],
+            marker="o",
+            linestyle="-",
+            label=f"Solución {s + 1} sin CF",
+            color=colors[s],
+        )
+        plt.plot(
+            periodos_range,
+            prop_vendible_quemada_cf[s],
+            marker="^",
+            linestyle="--",
+            label=f"Solución {s + 1} con CF",
+            color=colors[s],
+            markersize=8,
+        )
+
+    plt.title(f"Proporción de pérdidas por período para cada solución ({dataset_name})")
+    plt.xlabel("Períodos")
+    plt.ylabel("Proporción de biomasa vendible quemada")
+    plt.legend(title="Soluciones")
+    plt.grid(True)
+    plt.savefig(f"prop_vendible_quemada_por_solucion_{dataset_name}.png")
+    plt.show()
+
+    return prop_biomasa_quemada, prop_vendible_quemada, prop_biomasa_quemada_cf, prop_vendible_quemada_cf
+
+
+def biom_quemada(filtro, filtro_cf, bp, bp_cf, dataset_name):
+    soluciones = len(bp)  # Número de soluciones
+    rodales = len(bp[0])  # Número de rodales
+    periodos = len(bp[0][0])  # Número de periodos
+
+    # Crear listas para almacenar las biomasas quemadas por solución y periodo
+    biomasa_quemada = [[0 for _ in range(periodos)] for _ in range(soluciones)]
+    vendible_quemada = [[0 for _ in range(periodos)] for _ in range(soluciones)]
+    biomasa_quemada_cf = [[0 for _ in range(periodos)] for _ in range(soluciones)]
+    vendible_quemada_cf = [[0 for _ in range(periodos)] for _ in range(soluciones)]
+
+    # Iterar sobre soluciones, rodales y periodos para calcular la biomasa quemada
+    for s in range(soluciones):
+        for t in range(periodos):
+            biomasa_quemada[s][t] = sum((bp[s][r][t] * filtro[s][r]["biomass"][t]) for r in range(rodales))
+            biomasa_quemada_cf[s][t] = sum((bp_cf[s][r][t] * filtro_cf[s][r]["biomass"][t]) for r in range(rodales))
+            vendible_quemada[s][t] = sum((bp[s][r][t] * filtro[s][r]["vendible"][t]) for r in range(rodales))
+            vendible_quemada_cf[s][t] = sum((bp_cf[s][r][t] * filtro_cf[s][r]["vendible"][t]) for r in range(rodales))
+
+    biomasa_total = sum(biomasa_quemada[0][t] for t in range(periodos))
+    vendible_total = sum(vendible_quemada[0][t] for t in range(periodos))
+    biomasa_total_cf = sum(biomasa_quemada_cf[1][t] for t in range(periodos))
+    vendible_total_cf = sum(vendible_quemada_cf[1][t] for t in range(periodos))
+
+    # Graficar la biomasa quemada por periodo
+    import matplotlib.pyplot as plt
+
+    periodos_range = np.arange(periodos)
+    colors = plt.cm.tab10.colors  # Colores de la gama tab10
+
+    plt.figure(figsize=(10, 6))
+    for s in range(soluciones):
+        plt.plot(
+            periodos_range,
+            biomasa_quemada[s],
+            marker="o",
+            linestyle="-",
+            label=f"Solución {s + 1} sin CF",
+            color=colors[s],
+        )
+        plt.plot(
+            periodos_range,
+            biomasa_quemada_cf[s],
+            marker="^",
+            linestyle="--",
+            label=f"Solución {s + 1} con CF",
+            color=colors[s],
+            markersize=8,
+        )
+
+    plt.title(f"Biomasa quemada por período para cada solución ({dataset_name})")
+    plt.xlabel("Períodos")
+    plt.ylabel("Biomasa quemada")
+    plt.legend(title="Soluciones")
+    plt.grid(True)
+    plt.savefig(f"biomasa_quemada_por_solucion_{dataset_name}.png")
+    plt.show()
+
+    # Graficar la biomasa vendible quemada por periodo
+    plt.figure(figsize=(10, 6))
+    for s in range(soluciones):
+        plt.plot(
+            periodos_range,
+            vendible_quemada[s],
+            marker="o",
+            linestyle="-",
+            label=f"Solución {s + 1} sin CF",
+            color=colors[s],
+        )
+        plt.plot(
+            periodos_range,
+            vendible_quemada_cf[s],
+            marker="^",
+            linestyle="--",
+            label=f"Solución {s + 1} con CF",
+            color=colors[s],
+            markersize=8,
+        )
+
+    plt.title(f"Perdidas por período para cada solución ({dataset_name})")
+    plt.xlabel("Períodos")
+    plt.ylabel("Biomasa vendible quemada")
+    plt.legend(title="Soluciones")
+    plt.grid(True)
+    plt.savefig(f"vendible_quemada_por_solucion_{dataset_name}.png")
+    plt.show()
+
+    # Graficar la biomasa por periodo comparando la solución 1 sin cortafuegos y la solución 3 con cortafuegos
+    plt.figure(figsize=(10, 6))
+    width = 0.35  # Ancho de las barras
+    plt.bar(periodos_range - width / 2, biomasa_quemada[0], width=width, label="Mejor Solución sin CF", color=colors[0])
+    plt.bar(
+        periodos_range + width / 2, biomasa_quemada_cf[1], width=width, label="Mejor Solución con CF", color=colors[1]
+    )
+
+    # Agregar segunda "leyenda" con valores específicos
+    texto_explicativo = (
+        f"Biomasa total quemada: {biomasa_total:.2f}\n" f"Biomasa total con cortafuegos: {biomasa_total_cf:.2f}"
+    )
+    plt.text(
+        0.5,
+        0.85,
+        texto_explicativo,
+        transform=plt.gca().transAxes,  # Ubicación relativa en la esquina superior derecha
+        fontsize=12,
+        bbox=dict(facecolor="white", edgecolor="black", boxstyle="round,pad=0.5"),
+        verticalalignment="top",
+        horizontalalignment="right",
+    )
+
+    plt.title(f"Comparación de biomasa quemada por período ({dataset_name})")
+    plt.xlabel("Períodos")
+    plt.ylabel("Biomasa quemada")
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(f"comparacion_biomasa_quemada_{dataset_name}.png")
+    plt.show()
+
+    # Graficar la biomasa vendible por periodo comparando la solución 1 sin cortafuegos y la solución 3 con cortafuegos
+    plt.figure(figsize=(10, 6))
+    plt.bar(
+        periodos_range - width / 2, vendible_quemada[0], width=width, label="Mejor Solución sin CF", color=colors[0]
+    )
+    plt.bar(
+        periodos_range + width / 2, vendible_quemada_cf[1], width=width, label="Mejor Solución con CF", color=colors[1]
+    )
+
+    # Agregar segunda "leyenda" con valores específicos
+    texto_explicativo = (
+        f"Biomasa total quemada: {vendible_total:.2f}\n" f"Biomasa total con cortafuegos: {vendible_total_cf:.2f}"
+    )
+    plt.text(
+        0.95,
+        0.85,
+        texto_explicativo,
+        transform=plt.gca().transAxes,  # Ubicación relativa en la esquina superior derecha
+        fontsize=12,
+        bbox=dict(facecolor="white", edgecolor="black", boxstyle="round,pad=0.5"),
+        verticalalignment="top",
+        horizontalalignment="right",
+    )
+
+    plt.title(f"Comparación perdidas por período ({dataset_name})")
+    plt.xlabel("Períodos")
+    plt.ylabel("Biomasa vendible quemada")
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(f"comparacion_vendible_quemada_{dataset_name}.png")
+    plt.show()
+
+    return biomasa_quemada, vendible_quemada, biomasa_quemada_cf, vendible_quemada_cf
+
+
+def biom_final(filtro, bp):
+    soluciones = len(bp)  # Número de soluciones
+    rodales = len(bp[0])  # Número de rodales
+
+    # Crear una lista para almacenar las proporciones por solución y periodo
+    biomass_for_solution = [0 for _ in range(soluciones)]
+    biomass_for_solution_no_quema = [0 for _ in range(soluciones)]
+    # Iterar sobre soluciones, rodales y periodos para calcular la proporción quemada
+    for s in range(soluciones):
+        suma_solucion = sum(((1 - bp[s][r][-1]) * filtro[s][r]["biomass"][-1]) for r in range(rodales))
+        suma_solucion_no_quema = sum((filtro[s][r]["biomass"][-1]) for r in range(rodales))
+        biomass_for_solution[s] = suma_solucion
+        biomass_for_solution_no_quema[s] = suma_solucion_no_quema
+    return biomass_for_solution, biomass_for_solution_no_quema
+
+
+# Tu lista
+# Abre (o crea) un archivo de texto en modo escritura
+"""with open("bp_sin_cortafuegos.txt", "w") as archivo:
+    for item in bp_sin_cortafuegos:
+        archivo.write("%s\n" % item)
+
+
+with open("bp_con_cortafuegos.txt", "w") as archivo:
+    for item in bp_con_cortafuegos:
+        archivo.write("%s\n" % item)"""
+
+
+def grafico_ahora_si(filtro, filtro_cf, bp, bp_cf, dataset_name):
+    rodales = len(bp[0])  # Número de rodales
+    periodos = len(bp[0][0])  # Número de periodos
+    biomasa_quemada = [0 for _ in range(periodos)]
+    vendible_quemada = [0 for _ in range(periodos)]
+    biomasa_quemada_cf = [0 for _ in range(periodos)]
+    vendible_quemada_cf = [0 for _ in range(periodos)]
+    biomasa = [0 for _ in range(periodos)]
+    vendible = [0 for _ in range(periodos)]
+    biomasa_cf = [0 for _ in range(periodos)]
+    vendible_cf = [0 for _ in range(periodos)]
+    resto = [0 for _ in range(periodos)]
+    resto_cf = [0 for _ in range(periodos)]
+    prop_quemada = [0 for _ in range(periodos)]
+    prop_quemada_cf = [0 for _ in range(periodos)]
+    prop_vendible_quemada = [0 for _ in range(periodos)]
+    prop_vendible_quemada_cf = [0 for _ in range(periodos)]
+    prop_vendible = [0 for _ in range(periodos)]
+    prop_vendible_cf = [0 for _ in range(periodos)]
+    prop_resto = [0 for _ in range(periodos)]
+    prop_resto_cf = [0 for _ in range(periodos)]
+
+    for t in range(periodos):
+        biomasa_quemada[t] = sum((bp[0][r][t] * filtro[0][r]["biomass"][t]) for r in range(rodales))
+        vendible_quemada[t] = sum((bp[0][r][t] * filtro[0][r]["vendible"][t]) for r in range(rodales))
+        biomasa_quemada_cf[t] = sum((bp_cf[1][r][t] * filtro_cf[1][r]["biomass"][t]) for r in range(rodales))
+        vendible_quemada_cf[t] = sum((bp_cf[1][r][t] * filtro_cf[1][r]["vendible"][t]) for r in range(rodales))
+        biomasa[t] = sum((filtro[0][r]["biomass"][t]) for r in range(rodales))
+        vendible[t] = sum(((1 - bp[0][r][t]) * filtro[0][r]["vendible"][t]) for r in range(rodales))
+        biomasa_cf[t] = sum((filtro_cf[1][r]["biomass"][t]) for r in range(rodales))
+        vendible_cf[t] = sum(((1 - bp_cf[1][r][t]) * filtro_cf[1][r]["vendible"][t]) for r in range(rodales))
+        resto[t] = biomasa[t] - biomasa_quemada[t] - vendible[t]
+        resto_cf[t] = biomasa_cf[t] - biomasa_quemada_cf[t] - vendible_cf[t]
+        prop_quemada[t] = biomasa_quemada[t] / biomasa[t] if biomasa[t] > 0 else 0
+        prop_quemada_cf[t] = biomasa_quemada_cf[t] / biomasa_cf[t] if biomasa_cf[t] > 0 else 0
+        prop_vendible_quemada[t] = vendible_quemada[t] / (vendible[t] + vendible_quemada[t]) if vendible[t] > 0 else 0
+        prop_vendible_quemada_cf[t] = (
+            vendible_quemada_cf[t] / (vendible_cf[t] + vendible_quemada_cf[t]) if vendible_cf[t] > 0 else 0
+        )
+        prop_vendible[t] = vendible[t] / biomasa[t] if biomasa[t] > 0 else 0
+        prop_vendible_cf[t] = vendible_cf[t] / biomasa_cf[t] if biomasa_cf[t] > 0 else 0
+        prop_resto[t] = resto[t] / biomasa[t] if biomasa[t] > 0 else 0
+        prop_resto_cf[t] = resto_cf[t] / biomasa_cf[t] if biomasa_cf[t] > 0 else 0
+
+    biomasa_quema_total = sum(biomasa_quemada[t] for t in range(periodos))
+    vendible_quema_total = sum(vendible_quemada[t] for t in range(periodos))
+    biomasa_total_quema_cf = sum(biomasa_quemada_cf[t] for t in range(periodos))
+    vendible_total_quema_cf = sum(vendible_quemada_cf[t] for t in range(periodos))
+    vendible_total = sum(vendible[t] for t in range(periodos))
+    vendible_total_cf = sum(vendible_cf[t] for t in range(periodos))
+
+    # Graficar la biomasa quemada por periodo
+    import matplotlib.pyplot as plt
+
+    periodos_range = np.arange(periodos)
+    # Graficar la biomasa quemada por periodo en un gráfico de barras
+    plt.figure(figsize=(10, 6))
+    width = 0.35  # Ancho de las barras
+    plt.bar(periodos_range - width / 2, biomasa_quemada, width=width, label="Biomasa quemada sin CF")
+    plt.bar(periodos_range + width / 2, biomasa_quemada_cf, width=width, label="Biomasa quemada con CF")
+    plt.title(f"Comparación de biomasa quemada por período ({dataset_name})")
+    plt.xlabel("Períodos")
+    plt.ylabel("Biomasa quemada")
+    plt.legend()
+    plt.grid(True)
+    texto_explicativo = (
+        f"Biomasa quemada total sin CF: {biomasa_quema_total:.2f}\n"
+        f"Biomasa quemada total con CF: {biomasa_total_quema_cf:.2f}"
+    )
+    plt.text(
+        0.5,
+        0.85,
+        texto_explicativo,
+        transform=plt.gca().transAxes,
+        fontsize=12,
+        bbox=dict(facecolor="white", edgecolor="black", boxstyle="round,pad=0.5"),
+        verticalalignment="top",
+        horizontalalignment="right",
+    )
+    plt.savefig(f"biomasa_quemada_{dataset_name}.png")
+    plt.show()
+
+    # Graficar la  prop biomasa quemada por periodo en un gráfico de barras
+    plt.figure(figsize=(10, 6))
+    width = 0.35  # Ancho de las barras
+    plt.bar(periodos_range - width / 2, prop_quemada, width=width, label="Proporción biomasa quemada sin CF")
+    plt.bar(periodos_range + width / 2, prop_quemada_cf, width=width, label="Proporción biomasa quemada con CF")
+    plt.title(f"Comparación de proporción biomasa quemada por período ({dataset_name})")
+    plt.xlabel("Períodos")
+    plt.ylabel("Proporción biomasa quemada")
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(f"Proporción_biomasa_quemada_{dataset_name}.png")
+    plt.show()
+
+    # Graficar la biomasa vendible quemada por periodo en un gráfico de barras
+    plt.figure(figsize=(10, 6))
+    plt.bar(periodos_range - width / 2, vendible_quemada, width=width, label="Biomasa vendible quemada sin CF")
+    plt.bar(periodos_range + width / 2, vendible_quemada_cf, width=width, label="Biomasa vendible quemada con CF")
+    plt.title(f"Comparación de Pérdidas por biomasa vendible quemada por período ({dataset_name})")
+    plt.xlabel("Períodos")
+    plt.ylabel("Biomasa vendible quemada")
+    plt.legend()
+    plt.grid(True)
+    texto_explicativo = (
+        f"Biomasa vendible quemada total sin CF: {vendible_quema_total:.2f}\n"
+        f"Biomasa vendible quemada total con CF: {vendible_total_quema_cf:.2f}"
+    )
+    plt.text(
+        0.98,
+        0.85,
+        texto_explicativo,
+        transform=plt.gca().transAxes,
+        fontsize=12,
+        bbox=dict(facecolor="white", edgecolor="black", boxstyle="round,pad=0.5"),
+        verticalalignment="top",
+        horizontalalignment="right",
+    )
+    plt.savefig(f"vendible_quemada_{dataset_name}.png")
+    plt.show()
+
+    # Graficar la  prop biomasa vendible quemada por periodo en un gráfico de barras
+    plt.figure(figsize=(10, 6))
+    width = 0.35  # Ancho de las barras
+    plt.bar(periodos_range - width / 2, prop_vendible_quemada, width=width, label="Proporción perdidas sin CF")
+    plt.bar(periodos_range + width / 2, prop_vendible_quemada_cf, width=width, label="Proporción pérdidas con CF")
+    plt.title(f"Comparación proporción pérdidas por período ({dataset_name})")
+    plt.xlabel("Períodos")
+    plt.ylabel("Proporción pérdidas")
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(f"Proporción_biomasa_vendible_quemada_{dataset_name}.png")
+    plt.show()
+
+    # Graficar la biomasa vendible quemada por periodo en un gráfico de barras
+    plt.figure(figsize=(10, 6))
+    plt.bar(periodos_range - width / 2, vendible, width=width, label="Biomasa vendible sin CF")
+    plt.bar(periodos_range + width / 2, vendible_cf, width=width, label="Biomasa vendible con CF")
+    plt.title(f"Comparación de biomasa vendible por período ({dataset_name})")
+    plt.xlabel("Períodos")
+    plt.ylabel("Biomasa vendible")
+    plt.legend()
+    plt.grid(True)
+    texto_explicativo = (
+        f"Biomasa vendible total sin CF: {vendible_total:.2f}\n"
+        f"Biomasa vendible total con CF: {vendible_total_cf:.2f}"
+    )
+    plt.text(
+        0.95,
+        0.85,
+        texto_explicativo,
+        transform=plt.gca().transAxes,
+        fontsize=12,
+        bbox=dict(facecolor="white", edgecolor="black", boxstyle="round,pad=0.5"),
+        verticalalignment="top",
+        horizontalalignment="right",
+    )
+    plt.savefig(f"vendible_{dataset_name}.png")
+    plt.show()
+
+    # Graficar la  prop biomasa vendida por periodo con respecto a biomasa total en un gráfico de barras
+    plt.figure(figsize=(10, 6))
+    width = 0.35  # Ancho de las barras
+    plt.bar(periodos_range - width / 2, prop_vendible, width=width, label="Proporción biomasa vendida sin CF")
+    plt.bar(periodos_range + width / 2, prop_vendible_cf, width=width, label="Proporción biomasa vendida con CF")
+    plt.title(f"Comparación proporción biomasa vendida por período ({dataset_name})")
+    plt.xlabel("Períodos")
+    plt.ylabel("Proporción vendida")
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(f"Proporción_biomasa_vendible_{dataset_name}.png")
+    plt.show()
+
+    # Graficar la biomasa restante por periodo en un gráfico de barras
+    plt.figure(figsize=(10, 6))
+    plt.bar(periodos_range - width / 2, resto, width=width, label="Biomasa restante sin CF")
+    plt.bar(periodos_range + width / 2, resto_cf, width=width, label="Biomasa restante con CF")
+    plt.title(f"Comparación de biomasa restante por período ({dataset_name})")
+    plt.xlabel("Períodos")
+    plt.ylabel("Biomasa restante")
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(f"resto_{dataset_name}.png")
+    plt.show()
+
+    # Graficar la  prop biomasa restante por periodo con respecto a biomasa total en un gráfico de barras
+    plt.figure(figsize=(10, 6))
+    width = 0.35  # Ancho de las barras
+    plt.bar(periodos_range - width / 2, prop_resto, width=width, label="Proporción biomasa restante sin CF")
+    plt.bar(periodos_range + width / 2, prop_resto_cf, width=width, label="Proporción biomasa restante con CF")
+    plt.title(f"Comparación proporción biomasa restante por período ({dataset_name})")
+    plt.xlabel("Períodos")
+    plt.ylabel("Proporción biomasa restante")
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(f"Proporción_biomasa_resto_{dataset_name}.png")
+    plt.show()
+
+    return (
+        biomasa_quemada,
+        vendible_quemada,
+        biomasa_quemada_cf,
+        vendible_quemada_cf,
+        biomasa,
+        vendible,
+        biomasa_cf,
+        vendible_cf,
+        resto,
+        resto_cf,
+    )
+
+
+"""(biomasa_quema,vendible_quema,biomasa_quema_cf,vendible_quema_cf,biomasa,vendible,biomasa_cf,vendible_cf,resto,resto_cf) = grafico_ahora_si(f, f2, bp_sin_cortafuegos, bp_con_cortafuegos, "mejor solucion sin y con cortafuegos")
+"""
+#  1581 biomasa quitada con cortafuegos
+#  81197 biomasa total sin cortafuegos

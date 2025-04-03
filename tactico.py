@@ -3,59 +3,82 @@ from gurobipy import GRB
 import matplotlib.pyplot as plt
 import numpy as np
 import sys
+import csv
 
 
 if sys.version_info >= (3, 11):
     import tomllib
 
-    with open("config_test.toml", "rb") as f:
+    with open("config.toml", "rb") as f:
         config = tomllib.load(f)
 else:
     import toml
 
     config = toml.load("config.toml")
-rng = np.random.default_rng(4)
+
+
+if sys.version_info >= (3, 11):
+    import tomllib
+
+    with open("config_opti.toml", "rb") as f:
+        config_opti = tomllib.load(f)
+else:
+    import toml
+
+    config_opti = toml.load("config_opti.toml")
 
 
 def generate_random_walk_prices(initial_price, num_periods, mu=0.05, sigma=0.1):
     """Genera precios futuros usando un random walk con drift."""
     prices = [initial_price]
+    rng = np.random.default_rng(config["random"]["seed"])
     for _ in range(1, num_periods):
         drift = mu - 0.5 * sigma**2
         shock = sigma * rng.normal()
         next_price = prices[-1] * np.exp(drift + shock)
         prices.append(next_price)
+    plt.figure(figsize=(10, 6))
+    plt.plot(prices, linestyle="-", label="precios")
+    plt.title("Precios por periodo")
+    plt.xlabel("Períodos")
+    plt.ylabel("Precio")
+    plt.legend(title="Precios")
+    plt.grid(True)
+    plt.savefig("precios_por_periodo.png")
+    plt.show()
     return prices
 
 
 def calc_biomass_0(rodales):
     biom_0 = 0
-    for r in range(config["rodales"]):
+    for r in range(len(rodales)):
         biom_0 += rodales[r]["manejos"][0]["biomass"][0]
     return biom_0
 
 
 def no_poli(rodales):
     no_pol = []
-    periodos = config["horizonte"]
-    for r in range(config["rodales"]):
-        no_pol.append(rodales[r]["manejos"][0]["biomass"][periodos - 1])
+    for r in range(len(rodales)):
+        no_pol.append(rodales[r]["manejos"][0]["biomass"][-1])
     return no_pol
 
 
-def model_t(rodales, politicas, price):
-    tasa = config["opti"]["tasa"]
+def model_t(rodales, politicas, prices, dataset_name):
+    """Modelo de optimización para maximizar el valor presente neto (NPV) de la venta de biomasa."""
+    # Configuraciones y parámetros iniciales
+    tasa = config_opti["opti"]["tasa"]
     biom_0 = calc_biomass_0(rodales)
     no_pol = no_poli(rodales)
 
-    RR = config["rodales"]
+    RR = len(rodales)
     periodos = config["horizonte"]
-    prices = generate_random_walk_prices(price, periodos, mu=0.05, sigma=0.1)
 
     a = [[[0 for _ in range(periodos)] for _ in range(len(politicas))] for _ in range(RR)]
     b = [[0 for _ in range(len(politicas))] for _ in range(RR)]
     rodales_sin_combinaciones = set(range(RR))
     valid_combinations = set()
+
+    # Asignar combinaciones válidas iniciales
     for r in range(RR):
         for m in range(len(rodales[r]["manejos"])):
             r_value = rodales[r]["manejos"][m]["raleo"]
@@ -64,138 +87,215 @@ def model_t(rodales, politicas, price):
                 politica = politicas.index([r_value, c_value])
                 for t in range(periodos):
                     a[r][politica][t] = rodales[r]["manejos"][m]["vendible"][t]
-                    b[r][politica] = rodales[r]["manejos"][m]["biomass"][periodos - 1]
+                    b[r][politica] = rodales[r]["manejos"][m]["biomass"][-1]
                     if any(a[r][politica][t] != 0 for t in range(periodos)):
                         valid_combinations.add((r, politica))
                         rodales_sin_combinaciones.discard(r)
 
+    # Agregar combinaciones base para rodales sin combinaciones
     for rodal in rodales_sin_combinaciones:
         valid_combinations.add((rodal, 0))
 
-    B = config["opti"]["B"]
-    C = config["opti"]["C"]
-    D = config["opti"]["D"]
+    # Parámetros del modelo
+    B = config_opti["opti"]["B"]
+    C = config_opti["opti"]["C"]
+    D = config_opti["opti"]["D"]
 
     R = list(range(RR))
     M = list(range(len(politicas)))
     H = list(range(periodos))
 
+    # Crear el modelo de optimización
     model = gp.Model()
-
-    model.setParam("Heuristics", 0.1)  # Aumenta el esfuerzo en heurísticas
-    model.setParam(GRB.Param.PoolSolutions, 5)
-    model.setParam(GRB.Param.PoolSearchMode, 1)
-    model.setParam(GRB.Param.PoolGap, 0.1)
+    model.setParam("Heuristics", 0.1)
     model.setParam("MIPGap", 0.01)
     model.setParam("VarBranch", 1)
     model.setParam("Cuts", 1)
     model.setParam("Presolve", 1)
-    # model.setParam("RINS", 5)  # Activa la heurística RINS
-    # model.setParam("PumpPasses", 5)  # Ajusta la frecuencia de la heurística de Feasibility Pump
+    # model.setParam("PumpPasses", 10)
 
+    # Variables
     x = model.addVars(valid_combinations, vtype=GRB.BINARY)
     v = model.addVars(H, vtype=GRB.CONTINUOUS)
     y = model.addVars(R, vtype=GRB.CONTINUOUS)
 
+    print(f"Cantidad de variables binarias x: {len(valid_combinations)}")
+    print(f"Cantidad de variables continuas v: {len(H)}")
+    print(f"Cantidad de variables continuas y: {len(R)}")
+
+    # Función objetivo
     npv = gp.quicksum(x[i, j] * prices[t] * a[i][j][t] / (1 + tasa) ** t for (i, j) in valid_combinations for t in H)
     model.setObjective(npv, GRB.MAXIMIZE)
 
+    # Restricciones
+    # 4.5
     model.addConstr(gp.quicksum(x[i, j] * C for (i, j) in valid_combinations) <= B)
-
+    # 4.1
     for i in R:
         model.addConstr(gp.quicksum(x[i, j] for (i_, j) in valid_combinations if i_ == i) <= 1)
-
+    # 4.3
     for t in H:
         model.addConstr(gp.quicksum(x[i, j] * a[i][j][t] for (i, j) in valid_combinations) == v[t])
         if t >= 1:
+            # 4.4
             model.addConstr(-v[t - 1] + v[t] <= v[t - 1] / 10)
             model.addConstr(-v[t - 1] + v[t] >= -v[t - 1] / 10)
+            # 4.2
             model.addConstr(v[t] >= D)
 
     for i in R:
         y_expr = gp.quicksum(b[i][j] * x[i, j] for (i_, j) in valid_combinations if i_ == i)
-
-        # Añadir una nueva variable auxiliar que represente si se selecciona una política
         policy_selected = gp.quicksum(x[i, j] for (i_, j) in valid_combinations if i_ == i)
-
-        # Si se selecciona una política, y[i] es la suma ponderada, de lo contrario es no_pol[i]
+        # 4.6
         model.addConstr(y[i] == y_expr + (1 - policy_selected) * no_pol[i])
+    # 4.7
     model.addConstr(gp.quicksum(y[i] for i in R) >= biom_0)
 
-    # model running
+    # Registro del progreso del objetivo y gap
+    all_obj_vals = []
+    all_gaps = []
+
+    def callback(model, where):
+        if where == GRB.Callback.MIPSOL:
+            # Captura el valor del objetivo en soluciones factibles
+            obj_vals.append(model.cbGet(GRB.Callback.MIPSOL_OBJ))
+        if where == GRB.Callback.MIP:
+            # Captura el GAP actual en cada iteración del MIP
+            obj_bound = model.cbGet(GRB.Callback.MIP_OBJBND)
+            obj_best = model.cbGet(GRB.Callback.MIP_OBJBST)
+            if obj_best > 0:  # Evita divisiones por cero
+                gap = abs((obj_bound - obj_best) / obj_best) * 100
+                gaps.append(gap)
+
+    # Optimización del modelo
+    obj_vals = []
+    gaps = []
+    model.optimize(callback)
+
+    # Almacenar los valores del objetivo y GAP para la solución base
+    all_obj_vals.append(obj_vals.copy())
+    all_gaps.append(gaps.copy())
+
+    # Optimización de la solución base
     model.optimize()
 
-    for t in H:
-        print(f"v[{t}] = {v[t].X}")  # .X para acceder al valor de la variable optimizada
-    y_total = sum(y[i].X for i in R)
+    # Almacenar la solución base
+    soluciones = []  # Lista para guardar las soluciones
+    soluciones_v = []  # Para almacenar los valores de v_t
+    valores_objetivo = []  # Lista para guardar los valores objetivo de cada solución
 
-    # Imprimir el valor total de y
-    print(f"El valor total de y es: {y_total}")
-    print(biom_0)
-    for i in R:
-        pol_ut = False
-        for j in M:
-            if (i, j) in x and x[i, j].X > 0.9:
-                pol_ut = True
-                print("Se utilizó la política", politicas[j], "para el rodal", i)
-        if not pol_ut:
-            print(f"El rodal {i} no utilizó ninguna política.")
+    solucion_generada = {key: x[key].X for key in valid_combinations if x[key].X > 0.9}
+    soluciones.append(solucion_generada.copy())  # Guardar copia de la solución base
+    soluciones_v.append([v[t].X for t in H])  # Guardar los valores de v_t para la solución base
+    valores_objetivo.append(model.ObjVal)  # Guardar el valor objetivo de la solución base
 
-    for sol in range(model.SolCount):
-        model.setParam(GRB.Param.SolutionNumber, sol)
-        print(f"\nSolución {sol + 1}:")
-        for t in H:
-            print(f"v[{t}] = {v[t].Xn}")  # .Xn para acceder al valor de la n-ésima solución
-        print(f"Valor de la función objetivo: {model.PoolObjVal}")
+    # Generar soluciones adicionales con restricciones de diversidad
+    num_cambios = int(len(rodales) * 0.1)  # Cambiar un 10% de los rodales
 
-    v_values = [v[t].X for t in H]
+    for sol_num in range(1, config_opti["opti"]["soluciones"]):  # Generar soluciones adicionales
+        obj_vals = []
+        gaps = []
 
-    # Graficar los valores de v[t]
+        # Agregar restricciones de diversidad respecto a soluciones previas
+        for sol_prev in soluciones:
+            combinaciones_previas = list(sol_prev.keys())
+            model.addConstr(
+                gp.quicksum(x[i, j] for (i, j) in combinaciones_previas) <= len(combinaciones_previas) - num_cambios
+            )
+
+        # Optimizar el modelo con las restricciones de diversidad
+        model.update()
+        model.optimize(callback)
+
+        # Guardar la nueva solución generada
+        solucion_generada = {key: x[key].X for key in valid_combinations if x[key].X > 0.9}
+        soluciones.append(solucion_generada.copy())  # Guardar copia de la solución generada
+        soluciones_v.append([v[t].X for t in H])  # Guardar los valores de v_t
+        valores_objetivo.append(model.ObjVal)  # Guardar el valor objetivo de la solución generada
+
+        # Almacenar los valores del objetivo y GAP para la solución actual
+        all_obj_vals.append(obj_vals.copy())
+        all_gaps.append(gaps.copy())
+
+    # Generar gráfico del progreso del valor objetivo para todas las soluciones
     plt.figure(figsize=(10, 6))
-    plt.plot(H, v_values, marker="o", linestyle="-", color="b")
-    plt.title("Valor de v[t] a lo largo de los períodos")
-    plt.xlabel("Períodos")
-    plt.ylabel("Valor de v[t]")
+    for sol_num, obj_vals in enumerate(all_obj_vals):
+        plt.plot(range(len(obj_vals)), obj_vals, linestyle="-", label=f"Solución {sol_num + 1}")
+    plt.title(f"Progreso del valor objetivo durante la optimización ({dataset_name})")
+    plt.xlabel("Iteraciones")
+    plt.ylabel("Valor objetivo")
+    plt.legend()
     plt.grid(True)
+    plt.savefig(f"progreso_valor_objetivo_{dataset_name}.png")
     plt.show()
 
-    # grafico de Van
-    # Rodales
-    # warm start funcion objetivo rodales
-    # itertools
+    # Generar gráfico de la evolución del GAP para todas las soluciones
+    plt.figure(figsize=(10, 6))
+    for sol_num, gaps in enumerate(all_gaps):
+        plt.plot(range(len(gaps)), gaps, linestyle="-", label=f"Solución {sol_num + 1}")
+    plt.title(f"Evolución del GAP durante la optimización ({dataset_name})")
+    plt.xlabel("Iteraciones")
+    plt.ylabel("GAP (%)")
+    plt.yscale("log")  # Escala logarítmica para mejor visualización
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(f"evolucion_gap_{dataset_name}.png")
+    plt.show()
+
+    # Generar gráfico de v_t * price para las soluciones en valor presente
+    plt.figure(figsize=(10, 6))
+    for sol_num, valores_v in enumerate(soluciones_v):
+        valores_v_presente = [val * prices[t] / (1 + tasa) ** t for t, val in enumerate(valores_v)]
+        plt.plot(H, valores_v_presente, marker="o", linestyle="-", label=f"Solución {sol_num + 1}")
+    plt.title(f"Valores presentes por período para cada solución en valor presente ({dataset_name})")
+    plt.xlabel("Períodos")
+    plt.ylabel("v_t * Precio (Ventas en valor presente)")
+    plt.legend(title="Soluciones")
+    plt.grid(True)
+    plt.savefig(f"valores_presentes_por_solucion_{dataset_name}.png")
+    plt.show()
+
+    # Imprimir todas las soluciones generadas
+    for sol_idx, sol in enumerate(soluciones):
+        print(f"\nSolución {sol_idx + 1}:")
+        for rodal, manejo in sol.keys():
+            print(f"Rodal {rodales[rodal]['rid']}, Manejo {politicas[manejo]}")
+
+    # Guardar los valores objetivo en un archivo CSV
+    with open(f"valores_objetivo_{dataset_name}.csv", mode="w", newline="") as file:
+        writer = csv.writer(file)
+        writer.writerow(["Solución", "Valor Objetivo"])
+
+    print(f"Los valores objetivo de las soluciones se han guardado en el archivo valores_objetivo_{dataset_name}.csv.")
 
     # Después de optimizar el modelo, guarda las soluciones en una lista
     solutions = []
-    for sol in range(model.SolCount):
-        model.setParam(GRB.Param.SolutionNumber, sol)
+    for sol in soluciones:
         solution_dict = {}
-        for i, j in valid_combinations:
-            if x[i, j].Xn > 0.9:  # Si la política se selecciona
-                solution_dict[i] = politicas[j]  # Guardar el índice de la política j para el rodal i
+        for i, j in sol.keys():
+            solution_dict[i] = politicas[j]
         solutions.append(solution_dict)
 
     # Crear una lista de filas para el CSV, donde cada fila es un rodal y las columnas son las soluciones
     csv_rows = []
-    headers = ["Rodal"] + [f"Solucion_ {s + 1}" for s in range(len(solutions))]
+    headers = ["ID Rodal"] + [f"Solucion_{s + 1}" for s in range(len(solutions))]
 
-    for i in range(RR):  # Itera sobre cada rodal
-        row = [i]  # Inicia la fila con el número de rodal
+    # Iterar sobre cada rodal usando su ID
+    for i in range(RR):  # Itera sobre cada índice de rodal
+        rodal_id = rodales[i]["rid"]  # Obtén el ID del rodal
+        row = [rodal_id]  # Inicia la fila con el ID del rodal
         for sol in solutions:
             policy = sol.get(i, 0)  # Obtén la política seleccionada para el rodal i (si no hay, devuelve 0)
             row.append(policy)  # Agrega la política seleccionada o 0 si no hay
         csv_rows.append(row)
 
     # Guardar en un archivo CSV
-    import csv  # Asegúrate de importar csv si no está ya
-
-    csv_filename = "soluciones_x.csv"
+    csv_filename = f"soluciones_{dataset_name}.csv"
     with open(csv_filename, mode="w", newline="") as file:
         writer = csv.writer(file)
         writer.writerow(headers)  # Escribir los encabezados
         writer.writerows(csv_rows)  # Escribir las filas con los datos
 
-    print(f"Las soluciones de x[i,j] se han guardado en el archivo {csv_filename}.")
+    print(f"Las soluciones de x[i,j] se han guardado en el archivo {csv_filename} con los IDs de los rodales.")
 
-    return model.ObjVal
-
-
+    return valores_objetivo, csv_rows

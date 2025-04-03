@@ -1,0 +1,15 @@
+[datos]
+xllcorner = 457900 # punto georeferencial x
+yllcorner= 5716800 # punto georeferencial x
+ellsize = 100 
+nodata_value = -9999
+
+[opti]
+soluciones = 5
+Price = 63000
+tasa = 0.03 
+B = 540
+C = 10
+D = 1
+
+

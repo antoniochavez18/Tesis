@@ -1,13 +1,26 @@
-horizonte = 12
-rodales = 7
+horizonte = 10
+
 
 [random]
-seed = 4 # random number generator seed
-# min, max
+# random number generator seed: omit or comment for different results each run
+seed = 4 
+# `low` (inclusive) to `high` (exclusive)
+# n, n+1 for getting a single value: n
+# see np.random.randint
 edades = [1, 18]
 has = [5, 15]
-# min, max, step
-podas = [5, 15, 5]
-raleos = [6, 12, 2]
-cosechas = [8, 30, 4]
+rodales = 36
+
+# ranges: start, stop, step
+# n, n+1 for getting a single value range: [n]
+# see np.arange
+[pino]
+podas = [5, 15, 5] # not implemented
+raleos = [6, 11, 1]
+cosechas = [18, 29, 1]
+min_ral = 6
+
+[eucalyptus]
+podas = [4, 6, 2] # not implemented
+cosechas = [8, 13, 1]
 
