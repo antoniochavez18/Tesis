@@ -55,8 +55,8 @@ valores_objetivo, soluciones = model_t(rodales, politicas, prices, "rodales_sin_
 valores_objetivo_cf, soluciones_cf = model_t(rodales_cf, politicas, prices, "rodales_con_cortafuegos")
 
 # filtra los datos de los rodales dependiendo de las soluciones (ojo que las soluciones tienen que tener el mismo orden que los rodales)
-filter = filtro(rodales, "soluciones_rodales_sin_cortafuegos.csv")  # f[soluciones][rodales]
-filtro_cf = filtro(rodales_cf, "soluciones_rodales_con_cortafuegos.csv")
+filter = filtro(rodales, soluciones)  # f[soluciones][rodales]
+filtro_cf = filtro(rodales_cf, soluciones_cf)
 
 fuels_creation(gdf, filter, "./soluciones/data_modificada", "rid")  # crea los archivos de combustibles
 fuels_creation(gdf_cf, filtro_cf, "./cortafuegos/soluciones/data_modificada", "rid")

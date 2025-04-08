@@ -27,56 +27,58 @@ else:
 rng = np.random.default_rng(4)
 
 
-def filtro(rodales, csv_soluciones):
+def filtro(rodales, soluciones):
     """filtra los datos de los rodales dependiendo de las distintas soluciones."""
     # Cargamos los datos de los archivos
-    df_soluciones = pd.read_csv(csv_soluciones)  # Archivo de soluciones
 
     # Parámetros
     RR = len(rodales)  # Cantidad de rodales
-
     # Lista para almacenar las soluciones
-    soluciones = []
+    datos_soluciones = []
 
     # Iterar sobre cada solución (por columnas, ignorando la primera columna de nombres)
-    for col_idx, col_name in enumerate(df_soluciones.columns[1:]):
-        solucion = {}  # Inicializamos un diccionario por solución
+    for s in range(config_opti["opti"]["soluciones"]):
+        datos_solucion = {}  # Inicializamos un diccionario por solución
 
         # Iterar sobre cada rodal
         for r in range(RR):
             # Obtener la política
-            pol = ast.literal_eval(df_soluciones[col_name].iloc[r])
+            pol = soluciones[r][s + 1]
+            indice = next(i for i, rr in enumerate(rodales) if rr["rid"] == soluciones[r][0])
 
             # Inicializamos un diccionario por rodal para almacenar "codigo_kitral" y "vendible"
             rodal_data = {}
             rodal_data = {
-                "rid": rodales[r]["rid"],
-                "mid": rodales[r]["mid"],
-                "edad_inicial": rodales[r]["edad_inicial"],
+                "rid": rodales[indice]["rid"],
+                "mid": rodales[indice]["mid"],
+                "edad_inicial": rodales[indice]["edad_inicial"],
             }
 
             if pol == 0:
                 # Si no hay raleo ni cosecha, usar el primer manejo
-                rodal_data["codigo_kitral"] = rodales[r]["manejos"][0]["codigo_kitral"]
-                rodal_data["vendible"] = rodales[r]["manejos"][0]["vendible"]
-                rodal_data["biomass"] = rodales[r]["manejos"][0]["biomass"]
-                rodal_data["eventos"] = rodales[r]["manejos"][0]["eventos"]
+                rodal_data["codigo_kitral"] = rodales[indice]["manejos"][0]["codigo_kitral"]
+                rodal_data["vendible"] = rodales[indice]["manejos"][0]["vendible"]
+                rodal_data["biomass"] = rodales[indice]["manejos"][0]["biomass"]
+                rodal_data["eventos"] = rodales[indice]["manejos"][0]["eventos"]
             else:
                 # Buscar el manejo que coincida con la política
                 for m in range(len(rodales[r]["manejos"])):
-                    if rodales[r]["manejos"][m]["raleo"] == pol[0] and rodales[r]["manejos"][m]["cosecha"] == pol[1]:
-                        rodal_data["codigo_kitral"] = rodales[r]["manejos"][m]["codigo_kitral"]
-                        rodal_data["vendible"] = rodales[r]["manejos"][m]["vendible"]
-                        rodal_data["biomass"] = rodales[r]["manejos"][m]["biomass"]
-                        rodal_data["eventos"] = rodales[r]["manejos"][m]["eventos"]
+                    if (
+                        rodales[indice]["manejos"][m]["raleo"] == pol[0]
+                        and rodales[indice]["manejos"][m]["cosecha"] == pol[1]
+                    ):
+                        rodal_data["codigo_kitral"] = rodales[indice]["manejos"][m]["codigo_kitral"]
+                        rodal_data["vendible"] = rodales[indice]["manejos"][m]["vendible"]
+                        rodal_data["biomass"] = rodales[indice]["manejos"][m]["biomass"]
+                        rodal_data["eventos"] = rodales[indice]["manejos"][m]["eventos"]
 
             # Guardamos el diccionario de datos del rodal en la solución correspondiente
-            solucion[r] = rodal_data
+            datos_solucion[r] = rodal_data
 
         # Añadir la solución a la lista de soluciones
-        soluciones.append(solucion)
+        datos_soluciones.append(datos_solucion)
 
-    return soluciones
+    return datos_soluciones
 
 
 def multiplicar_listas(bp, filtro):
