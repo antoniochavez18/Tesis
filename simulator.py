@@ -7,10 +7,10 @@ Una ejecucion genera un lista de rodales (:dict) con sus manejos (:dict), biomas
     rodales = [ ...
         {'rid': 9,           # rodal id
          'mid': 24,          # model id
-         'edad_inicial': 17, 
-         'edad_final': 27, 
+         'edad_inicial': 17,
+         'edad_final': 27,
          'ha': 14,
-         'manejos' : [ ... 
+         'manejos' : [ ...
             {'rid': 9,
              'cosecha': 18,
              'raleo': 6,
@@ -26,7 +26,7 @@ Una ejecucion genera un lista de rodales (:dict) con sus manejos (:dict), biomas
 
 Uso:
     - crear/editar config.toml
-    - ejecutar en consola: 
+    - ejecutar en consola:
        python simulator.py --help
        python simulator.py other_config.toml
        ipython simulator.py
@@ -198,7 +198,6 @@ def generate_random_forest(config=read_toml(), models=get_models()):
 
 
 def generate_forest(config=read_toml(), filepath="./bosque_data.csv"):
-    from auxiliary import get_data, create_forest
 
     data = np.genfromtxt(filepath, delimiter=",", names=True)
     rodales = []
@@ -270,7 +269,7 @@ def generate(config=read_toml(), models=get_models(), rodales=generate_forest())
         else:
             has_raleo = False
 
-        print(f"{rodal["rid"]=}, {has_cosecha=}, {has_raleo=}")
+        print(f"{rodal['rid']=}, {has_cosecha=}, {has_raleo=}")
         # 4 cases combinations of "has_cosecha" and "has_raleo"
         # 1 no hacer nada
         if not has_cosecha and not has_raleo:
@@ -288,7 +287,9 @@ def generate(config=read_toml(), models=get_models(), rodales=generate_forest())
                 if model["prev"] == -1:
                     mods = [model["id"]] * len(edades_manejo)
                 else:
-                    mods = [model["id"] if e > 6 else model["prev"] for e in edades_manejo]
+                    mods = [
+                        model["id"] if e > config[model["Especie"]]["min_ral"] else model["prev"] for e in edades_manejo
+                    ]
                 manejo = {
                     "rid": rodal["rid"],
                     "cosecha": cosecha,
@@ -334,8 +335,22 @@ def generate(config=read_toml(), models=get_models(), rodales=generate_forest())
                         [
                             (
                                 (calc_biomass(model, raleo) - calc_biomass(models[model["next"]], raleo))
-                                if e == raleo
-                                else 0
+                                if e == raleo and models[model["next"]]["stable_year"] == 0
+                                else (
+                                    (
+                                        (
+                                            raleo
+                                            / np.ceil(models[model["next"]]["stable_year"])
+                                            * (
+                                                model["α"] * np.ceil(models[model["next"]]["stable_year"]) ** model["β"]
+                                                + model["γ"]
+                                            )
+                                        )
+                                        - calc_biomass(models[model["next"]], raleo)
+                                    )
+                                    if e == raleo and models[model["next"]]["stable_year"] != 0
+                                    else 0
+                                )
                             )
                             for e in edades
                         ]
@@ -379,7 +394,19 @@ def generate(config=read_toml(), models=get_models(), rodales=generate_forest())
                     for e in edades_manejo:
                         if e == raleo:
                             eventos += ["r"]
-                            vendible += [(calc_biomass(model, raleo) - calc_biomass(models[model["next"]], raleo))]
+                            vendible += [
+                                (
+                                    calc_biomass(model, raleo) - calc_biomass(models[model["next"]], raleo)
+                                    if models[model["next"]]["stable_year"] == 0
+                                    else raleo
+                                    / np.ceil(models[model["next"]]["stable_year"])
+                                    * (
+                                        model["α"] * np.ceil(models[model["next"]]["stable_year"]) ** model["β"]
+                                        + model["γ"]
+                                    )
+                                    - calc_biomass(models[model["next"]], raleo)
+                                )
+                            ]
                         elif e == 0:
                             eventos += ["c"]
                             vendible += [calc_biomass(models[model["next"]], cosecha)]
@@ -405,7 +432,19 @@ def generate(config=read_toml(), models=get_models(), rodales=generate_forest())
                     for e in edades_manejo:
                         if e == raleo and "c" in eventos:
                             eventos += ["r"]
-                            vendible += [(calc_biomass(models[model["prev"]], raleo) - calc_biomass(model, raleo))]
+                            vendible += [
+                                (
+                                    calc_biomass(models[model["prev"]], raleo) - calc_biomass(model, raleo)
+                                    if model["stable_year"] == 0
+                                    else raleo
+                                    / model["stable_year"]
+                                    * (
+                                        models[model["prev"]]["α"] * model["stable_year"] ** models[model["prev"]]["β"]
+                                        + models[model["prev"]]["γ"]
+                                    )
+                                    - calc_biomass(model, raleo)
+                                )
+                            ]
                         elif e == 0:
                             eventos += ["c"]
                             vendible += [calc_biomass(model, cosecha)]
@@ -538,7 +577,6 @@ def main(argv=None):
         rodales_sin_manejo = generate_random_forest()
 
     else:
-        from auxiliary import get_data, create_forest
 
         # usar bosque_data.csv, si no se tiene se puede crear con las funciones del auxiliary
         rodales_sin_manejo = generate_forest(config, args.data_forest)
