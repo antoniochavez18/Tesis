@@ -48,7 +48,7 @@ def get_data(filepath=".\\test\\data_base\\proto.shp"):
     datasource = None"""
 
 
-def create_forest(gdf=get_data(), id="fid"):
+def create_forest(gdf, id="fid",outfile="bosque_data.csv"):
     data_rodales = gdf.dropna(subset=["edad"])
     data_rodales_2 = data_rodales.loc[data_rodales["area_ha"] > 0]
     bos_names = ["rid", "mid", "edad_inicial", "ha"]  # aprender hacer formato decente
@@ -72,7 +72,7 @@ def create_forest(gdf=get_data(), id="fid"):
         dtype=[("rid", "i4"), ("mid", "i4"), ("edad_inicial", "i4"), ("ha", "f4")],
     )
     np.savetxt(
-        "bosque_data.csv", bos, delimiter=",", header=",".join(bos_names), comments="", fmt=["%d", "%d", "%d", "%.2f"]
+        outfile, bos, delimiter=",", header=",".join(bos_names), comments="", fmt=["%d", "%d", "%d", "%.2f"]
     )
 
 

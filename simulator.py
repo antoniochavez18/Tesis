@@ -166,7 +166,7 @@ def read_toml(config_toml="config.toml"):
     return config
 
 
-def generate_random_forest(config=read_toml(), models=get_models()):
+def generate_random_forest(config=None, models=None):
 
     # 0 setup random number generator
     if seed := config["random"].get("seed"):
@@ -197,7 +197,7 @@ def generate_random_forest(config=read_toml(), models=get_models()):
     return rodales
 
 
-def generate_forest(config=read_toml(), filepath="./bosque_data.csv"):
+def generate_forest(config=None, filepath="bosque_data.csv"):
 
     data = np.genfromtxt(filepath, delimiter=",", names=True)
     rodales = []
@@ -217,7 +217,7 @@ def generate_forest(config=read_toml(), filepath="./bosque_data.csv"):
     return rodales
 
 
-def generate(config=read_toml(), models=get_models(), rodales=generate_forest()):
+def generate(config=None, models=None, rodales=None):
     """Genera los rodales con las biomasas generadas por cada año, dependiendo de su manejo y edad de crecimiento, junto con la biomasa para vender y el codigo kitral"""
     for rodal in rodales:
         indices = np.where(models["id"] == rodal["mid"])[0]
