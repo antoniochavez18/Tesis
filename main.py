@@ -33,6 +33,18 @@ def simular_crecimiento():
 gdf, rodales = simular_crecimiento() # paso 1
 
 def crear_opciones_cortafuegos(gdf,rodales): #paso 2
+
+    """paso 2, crear los DPV en valor presente, fuels y biomasa del bosque sin manejo
+    inputs: 
+       - area de estudio (gdf)
+       - archivo de configuracion (config.toml)
+       - archivo de configuracion  de optimizacion (config_opti.toml)
+       - rodales (lista de diccionarios con los rodales y sus atributos)
+    outputs:
+       - DPV en valor presente (raster)
+       - biomasa (raster)
+       - fuels (raster)
+    """
     # solo para linux ssh necesario paso 1
 
     # import os
@@ -50,58 +62,60 @@ def crear_opciones_cortafuegos(gdf,rodales): #paso 2
     print("Se han creado los DPV para decidir cortafuegos, se guardan en la carpeta de cortafuegos")
 crear_opciones_cortafuegos(gdf,rodales)
 
-#paso 3 es calcular luego para elegir cortafuegos optimizar knapsack con valor dpv restringiendo 1,2 y 3% de area tratada (cortafuego)
-#terminar calculando expected losses de cada cortafuego y caso base, para eso es debido simular incendios con cada cortafuego y caso base, luego ocupar calculadora raster
-def calcular_sensibilidad_cortafuegos(caso_base_path,cortafuego_1_path,cortafuego_2_path,cortafuego_3_path) #paso 4
-    from fire2a.raster import read_raster
-    import matplotlib.pyplot as plt
-    import numpy as np
-    # simular incendios con distintas capacidades de cortafuegos y el caso base sin cortafuegos
-    # calculadora raster mirar tesis en punto 4.5.2 formula 4.1 para crear archivos expected_loss
+def calcular_sensibilidad_cortafuegos(): #paso 3
+    """paso 3, crear cortafuegos, calcular la sensibilidad (NPE) de los cortafuegos y guardar el mejor cortafuegos
+
+    inputs: 
+       - DPV en valor presente (raster)
+       - biomasa (raster)
+       - fuels (raster)
+       - lista capacidades de los cortafuegos (cuanto del paisaje es cortafuegos)
+       - cordenada (EPSG)
+    outputs:
+       - archivo tif del cortafuego ganador
+    """
+    from use_of_QGIS import sensibilidades_cortafuegos
+    from pathlib import Path
+
+    import os
+    os.environ["QT_QPA_PLATFORM"] = "offscreen"
+    cordenada = "EPSG:32718"
+    capacidades = [0.01, 0.02, 0.03]
+    path_DPV = str(Path("./cortafuegos/protection_value.tif"))
+    path_fuels = str(Path("./cortafuegos/fuels/fuels_base_periodo_0.tif"))
+    path_biomass = str(Path("./cortafuegos/biomass/biomass_base_periodo_0.tif"))
+    sensibilidades_cortafuegos(path_DPV,capacidades,path_fuels,path_biomass,cordenada)
 
 
-    # Leer los datos de los archivos raster
-    expected_loss_uno, _ = read_raster(cortafuego_1_path, info=False)
-    expected_loss_dos, _ = read_raster(cortafuego_2_path, info=False)
-    expected_loss_tres, _ = read_raster(cortafuego_3_path, info=False)
-    expected_loss_caso_case, _ = read_raster(caso_base_path, info=False)
-    # agregar revision que no sea
-    assert np.all(expected_loss_uno >= 0)
-    # Reemplazar valores negativos por 0
-    expected_loss_uno = np.where(expected_loss_uno < 0, 0, expected_loss_uno)
-    expected_loss_dos = np.where(expected_loss_dos < 0, 0, expected_loss_dos)
-    expected_loss_tres = np.where(expected_loss_tres < 0, 0, expected_loss_tres)
-    expected_loss_caso_case = np.where(expected_loss_caso_case < 0, 0, expected_loss_caso_case)
+calcular_sensibilidad_cortafuegos()
 
-    # Calcular las pérdidas y sensibilidades
-    perdida_uno = np.sum(expected_loss_uno)
-    perdida_dos = np.sum(expected_loss_dos)
-    perdida_tres = np.sum(expected_loss_tres)
-    perdida_caso_base = np.sum(expected_loss_caso_case)
+def rodales_con_cortafuegos(rodales): # paso 3.5
+    """paso 3.5, crear el paisaje con cortafuegos y calcular la biomasa con cortafuegos
+    inputs: 
+       - rodales (lista de diccionarios con los rodales y sus atributos)
+       - cortafuegos (raster)
+    outputs:
+       - rodales con cortafuegos (lista de diccionarios con los rodales y sus atributos)
+    """
+    from use_of_QGIS import create_paisaje_con_cortafuegos
+    from auxiliary import get_data
+    from post_optimization import biomass_with_fire_breacks
+    from pathlib import Path
+    import os
+    os.environ["QT_QPA_PLATFORM"] = "offscreen"
+    area_estudio=str(Path("test/data_modificada/proto_mod.shp"))
+    cortafuegos = str(Path("cortafuegos/cortafuegos_0.02.tif"))
+    create_paisaje_con_cortafuegos(area_estudio,cortafuegos) # crear paisaje con cortafuegos
+    area_con_cortafuegos= Path("cortafuegos/data_cortafuegos/data_modificada/proto_mod.shp")
+    gdf_cf = get_data(area_con_cortafuegos)  # se adquiere el shapefile rodales con cortafuegos
+    gdf_cf = gdf_cf.sort_values(by="rid")
 
-    sensibilidad_uno = perdida_caso_base - perdida_uno
-    sensibilidad_dos = perdida_caso_base - perdida_dos
-    sensibilidad_tres = perdida_caso_base - perdida_tres
+    # se renombra la columna _mean a prop_cf (proporcion de cortafuegos) mean porque venia de estadistica zonal
+    gdf_cf.rename(columns={"_mean": "prop_cf"}, inplace=True)
+    rodales_cf = biomass_with_fire_breacks(
+        rodales, gdf_cf, "rid"
+    )
+    return rodales_cf  # leer el paisaje con cortafuegos
 
-    # Preparar los datos para el gráfico
-    sensibilidades = ["1%", "2%", "3%"]
-    npe_values = [sensibilidad_uno, sensibilidad_dos, sensibilidad_tres]
-
-    # Crear el gráfico de barras
-    plt.figure(figsize=(10, 6))
-    plt.bar(sensibilidades, npe_values, color=["blue", "green", "red"])
-
-    # Añadir título y etiquetas
-    plt.title("Net Protective Effect (NPE)")
-    plt.xlabel("Capacidades")
-    plt.ylabel("NPE")
-
-    # Mostrar y guardar el gráfico
-    plt.grid(True)
-    plt.savefig("net_protective_effect.png")
-    plt.show()
-    # escoger capacidad con mejor (mayor) sensibilidad (mirar grafico)
-    # 5 utilizar estadistica de zona de qgis para tener el mean de cortafuegos por rodal
-
-    # output final proto_Cf.shp y cortafuegos.tif
+rodales_cf = rodales_con_cortafuegos(rodales)
 

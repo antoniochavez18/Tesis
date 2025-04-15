@@ -1,4 +1,9 @@
+# 
 horizonte = 10
+#tabla de los modelos de crecieminto
+tabla="tabla.csv"
+
+
 
 
 [random]
