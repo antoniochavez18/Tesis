@@ -299,3 +299,131 @@ def model_t(rodales, politicas, prices, dataset_name):
     print(f"Las soluciones de x[i,j] se han guardado en el archivo {csv_filename} con los IDs de los rodales.")
 
     return valores_objetivo, csv_rows
+
+
+# Este código es una adaptación de un modelo de optimización de Gurobi a CPLEX usando docplex
+from docplex.mp.model import Model
+import csv
+import matplotlib.pyplot as plt
+
+
+# Este código es una versión adaptada del modelo Gurobi a CPLEX usando docplex, con el mismo número de soluciones
+from docplex.mp.model import Model
+import csv
+import matplotlib.pyplot as plt
+
+
+def model_t_cplex(rodales, politicas, prices, dataset_name):
+    tasa = config_opti["opti"]["tasa"]
+    biom_0 = calc_biomass_0(rodales)
+    no_pol = no_poli(rodales)
+
+    RR = len(rodales)
+    periodos = config["horizonte"]
+
+    a = [[[0 for _ in range(periodos)] for _ in range(len(politicas))] for _ in range(RR)]
+    b = [[0 for _ in range(len(politicas))] for _ in range(RR)]
+    rodales_sin_combinaciones = set(range(RR))
+    valid_combinations = set()
+
+    for r in range(RR):
+        for m, manejo in enumerate(rodales[r]["manejos"]):
+            r_value = manejo["raleo"]
+            c_value = manejo["cosecha"]
+            if [r_value, c_value] in politicas:
+                politica = politicas.index([r_value, c_value])
+                for t in range(periodos):
+                    a[r][politica][t] = manejo["vendible"][t]
+                    b[r][politica] = manejo["biomass"][-1]
+                    if any(a[r][politica][t] != 0 for t in range(periodos)):
+                        valid_combinations.add((r, politica))
+                        rodales_sin_combinaciones.discard(r)
+
+    for rodal in rodales_sin_combinaciones:
+        valid_combinations.add((rodal, 0))
+
+    B = config_opti["opti"]["B"]
+    C = config_opti["opti"]["C"]
+    D = config_opti["opti"]["D"]
+
+    R = list(range(RR))
+    H = list(range(periodos))
+
+    soluciones = []
+    soluciones_v = []
+    valores_objetivo = []
+
+    mdl = Model(name="forest_optimization")
+
+    x = mdl.binary_var_dict(valid_combinations, name="x")
+    v = mdl.continuous_var_list(H, name="v")
+    y = mdl.continuous_var_list(R, name="y")
+
+    npv = mdl.sum(x[i, j] * prices[t] * a[i][j][t] / (1 + tasa) ** t for (i, j) in valid_combinations for t in H)
+    mdl.maximize(npv)
+
+    mdl.add_constraint(mdl.sum(x[i, j] * C for (i, j) in valid_combinations) <= B)
+
+    for i in R:
+        mdl.add_constraint(mdl.sum(x[i, j] for (i_, j) in valid_combinations if i_ == i) <= 1)
+
+    for t in H:
+        mdl.add_constraint(mdl.sum(x[i, j] * a[i][j][t] for (i, j) in valid_combinations) == v[t])
+        if t >= 1:
+            mdl.add_constraint(v[t] - v[t - 1] <= v[t - 1] / 10)
+            mdl.add_constraint(v[t - 1] - v[t] <= v[t - 1] / 10)
+        mdl.add_constraint(v[t] >= D)
+
+    for i in R:
+        y_expr = mdl.sum(b[i][j] * x[i, j] for (i_, j) in valid_combinations if i_ == i)
+        policy_selected = mdl.sum(x[i, j] for (i_, j) in valid_combinations if i_ == i)
+        mdl.add_constraint(y[i] == y_expr + (1 - policy_selected) * no_pol[i])
+
+    mdl.add_constraint(mdl.sum(y[i] for i in R) >= biom_0)
+
+    num_solutions = config_opti["opti"]["soluciones"]
+    num_cambios = int(len(rodales) * 0.1)
+
+    for sol_num in range(num_solutions):
+        if sol_num > 0:
+            for sol_prev in soluciones:
+                combinaciones_previas = list(sol_prev.keys())
+                mdl.add_constraint(
+                    mdl.sum(x[i, j] for (i, j) in combinaciones_previas) <= len(combinaciones_previas) - num_cambios
+                )
+
+        sol = mdl.solve(log_output=False)
+
+        if not sol:
+            print(f"No se encontró solución en la iteración {sol_num + 1}.")
+            break
+
+        solucion_generada = {
+            (i, j): x[i, j].solution_value for (i, j) in valid_combinations if x[i, j].solution_value > 0.9
+        }
+        soluciones.append(solucion_generada.copy())
+        soluciones_v.append([v[t].solution_value for t in H])
+        valores_objetivo.append(sol.objective_value)
+
+    # Guardar resultados CSV con detalles del manejo utilizado
+    csv_rows = []
+    headers = ["ID Rodal"] + [f"Solucion_{s + 1}" for s in range(len(soluciones))]
+    for i in range(RR):
+        rodal_id = rodales[i]["rid"]
+        row = [rodal_id]
+        for sol in soluciones:
+            selected_policy = None
+            for j in range(len(politicas)):
+                if (i, j) in sol:
+                    selected_policy = politicas[j]
+                    break
+            row.append(selected_policy if selected_policy else "Sin manejo")
+        csv_rows.append(row)
+
+    csv_filename = f"soluciones_{dataset_name}.csv"
+    with open(csv_filename, mode="w", newline="") as file:
+        writer = csv.writer(file)
+        writer.writerow(headers)
+        writer.writerows(csv_rows)
+
+    return valores_objetivo, csv_rows
