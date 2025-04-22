@@ -313,7 +313,7 @@ import csv
 import matplotlib.pyplot as plt
 
 
-def model_t_cplex(rodales, politicas, prices, dataset_name):
+def model_t_cplex(rodales, politicas, prices, dataset_name, config, config_opti):
     tasa = config_opti["opti"]["tasa"]
     biom_0 = calc_biomass_0(rodales)
     no_pol = no_poli(rodales)
@@ -417,7 +417,7 @@ def model_t_cplex(rodales, politicas, prices, dataset_name):
                 if (i, j) in sol:
                     selected_policy = politicas[j]
                     break
-            row.append(selected_policy if selected_policy else "Sin manejo")
+            row.append(selected_policy if selected_policy else 0)
         csv_rows.append(row)
 
     csv_filename = f"soluciones_{dataset_name}.csv"
