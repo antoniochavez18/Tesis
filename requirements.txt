@@ -8,3 +8,5 @@ toml; python_version < '3.11'
 geopandas
 pandas 
 gurobipy
+cplex
+docplex

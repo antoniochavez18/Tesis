@@ -1,10 +1,10 @@
+import csv
+import sys
+
 import gurobipy as gp
-from gurobipy import GRB
 import matplotlib.pyplot as plt
 import numpy as np
-import sys
-import csv
-
+from gurobipy import GRB
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -44,8 +44,8 @@ def generate_random_walk_prices(initial_price, num_periods, mu=0.05, sigma=0.1):
     plt.ylabel("Precio")
     plt.legend(title="Precios")
     plt.grid(True)
-    plt.savefig("precios_por_periodo.png")
-    plt.show()
+    # plt.savefig("precios_por_periodo.png")
+    # plt.show()
     return prices
 
 
@@ -303,14 +303,8 @@ def model_t(rodales, politicas, prices, dataset_name):
 
 # Este código es una adaptación de un modelo de optimización de Gurobi a CPLEX usando docplex
 from docplex.mp.model import Model
-import csv
-import matplotlib.pyplot as plt
-
 
 # Este código es una versión adaptada del modelo Gurobi a CPLEX usando docplex, con el mismo número de soluciones
-from docplex.mp.model import Model
-import csv
-import matplotlib.pyplot as plt
 
 
 def model_t_cplex(rodales, politicas, prices, dataset_name, config, config_opti):

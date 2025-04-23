@@ -53,6 +53,7 @@ Funciones auxiliares (see auxiliary.py):
 
 Notice: Numpy is set to print only one decimal digit
 """
+
 import sys
 from itertools import product
 from pathlib import Path
@@ -129,6 +130,48 @@ def generar_codigo_kitral(especie: str, edad: int, condicion: str) -> int:
     return value
 
 
+def obtener_datos_kitral(codigo_kitral: int) -> dict:
+    """Obtiene la especie, rango de edad y condición a partir de un código Kitral."""
+    if codigo_kitral in [19, 20, 21, 22, 23, 24, 25]:
+        especie = "pino"
+        if codigo_kitral == 19:
+            edad = "0-3"
+            condicion = "sin manejo"
+        elif codigo_kitral == 20:
+            edad = "4-11"
+            condicion = "sin manejo"
+        elif codigo_kitral == 21:
+            edad = "12-17"
+            condicion = "sin manejo"
+        elif codigo_kitral == 22:
+            edad = "18+"
+            condicion = "sin manejo"
+        elif codigo_kitral == 23:
+            edad = "6-11"
+            condicion = "con manejo"
+        elif codigo_kitral == 24:
+            edad = "12-17"
+            condicion = "con manejo"
+        elif codigo_kitral == 25:
+            edad = "18+"
+            condicion = "con manejo"
+    elif codigo_kitral in [26, 27, 28]:
+        especie = "eucalyptus"
+        if codigo_kitral == 26:
+            edad = "0-3"
+            condicion = "sin manejo"
+        elif codigo_kitral == 27:
+            edad = "4-10"
+            condicion = "sin manejo"
+        elif codigo_kitral == 28:
+            edad = "11+"
+            condicion = "sin manejo"
+    else:
+        return {"error": "Código Kitral desconocido"}
+
+    return {"especie": especie, "edad": edad, "condicion": condicion}
+
+
 def print_manejos_possibles(config):
     """Imprime todos los manejos posibles para los rodales"""
     manejos_posibles = []
@@ -167,7 +210,6 @@ def read_toml(config_toml="config.toml"):
 
 
 def generate_random_forest(config=None, models=None):
-
     # 0 setup random number generator
     if seed := config["random"].get("seed"):
         rng = np.random.default_rng(seed)
@@ -186,7 +228,7 @@ def generate_random_forest(config=None, models=None):
         e1 = e0 + config["horizonte"]
         ha = rng.integers(*config["random"]["has"])
         rodal = {
-            "rid": rodal["rid"],
+            "rid": r,
             "mid": model["id"],
             "edad_inicial": e0,
             "edad_final": e1,
@@ -198,7 +240,6 @@ def generate_random_forest(config=None, models=None):
 
 
 def generate_forest(config=None, filepath="bosque_data.csv"):
-
     data = np.genfromtxt(filepath, delimiter=",", names=True)
     rodales = []
     for r in data:
@@ -257,7 +298,7 @@ def generate(config=None, models=None, rodales=None):
                     edades_manejo = edades % cosecha
                     if model["prev"] == -1:  # no raleado desde un inicio
                         has_raleo = (model["next"] != -1) and any(
-                            np.isin(np.arange(*config["pino"]["raleos"]), edades_anejo)
+                            np.isin(np.arange(*config["pino"]["raleos"]), edades_manejo)
                         )
                     else:  # raleado desde un inicio
                         raleos = np.arange(*config["pino"]["raleos"])
@@ -379,7 +420,6 @@ def generate(config=None, models=None, rodales=None):
             ):
                 edades_manejo = edades % cosecha
                 if model["prev"] == -1:
-
                     if (raleo >= cosecha) or (cosecha not in edades) or (raleo not in edades_manejo):
                         # display(f"skipping: {min(edades_manejo)=} {max(edades_manejo)=} !< {raleo=} !< {cosecha=} !< {e1=}")
                         continue
@@ -577,7 +617,6 @@ def main(argv=None):
         rodales_sin_manejo = generate_random_forest()
 
     else:
-
         # usar bosque_data.csv, si no se tiene se puede crear con las funciones del auxiliary
         rodales_sin_manejo = generate_forest(config, args.data_forest)
 

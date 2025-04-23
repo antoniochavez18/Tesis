@@ -196,7 +196,7 @@ def burn_prob(apath, temp_dir, fire_breaks=None, paisaje=".\\test\\data_base\\pr
 
 
 def burn_prob_sol(
-    num_soluciones, formato, filtro, input, corta_fuegos=False, id="fid", paisaje="test\\data_base\\proto.shp"
+    num_soluciones, formato, filtro, input, config, corta_fuegos=False, id="fid", paisaje="test\\data_base\\proto.shp"
 ):
     """
     Calculate burn probability for multiple solutions over different periods.
@@ -273,7 +273,7 @@ def burn_prob_sol(
     return bp  # Devuelve bp[s][r][t] donde s es la solución, r es el rodal y t el periodo
 
 
-def fuels_creation(gdf, filtro, output, id="fid"):
+def fuels_creation(gdf, filtro, output, config, id="fid"):
     """Crea los combustibles a partir de geopandas y los filtros de las soluciones (los combustibles de las soluciones)s"""
     gdf_temp = gdf.copy()
     periodos = config["horizonte"]
@@ -466,7 +466,7 @@ def crear_cortafuegos(DPV, capacidad):
             "NEOS_SOLVER": "cplex",
             "OUT_LAYER": "TEMPORARY_OUTPUT",
             "RATIO": capacidad,
-            "SOLVER": "cbc: ratioGap=0.005 seconds=300 threads=7",
+            "SOLVER": "cplex: mipgap=0.005 timelimit=300",
             "VALUE": DPV,
             "WEIGHT": None,
         },
@@ -546,7 +546,7 @@ def raster_calculator(bp, biomass, cortafuegos=None):
             "native:rastercalc",
             {
                 "EXPRESSION": '"biomass_base_periodo_0@1" * "BurnProbability@1"',
-                "LAYERS": [ bp, biomass],
+                "LAYERS": [bp, biomass],
                 "OUTPUT": "TEMPORARY_OUTPUT",
             },
         )
@@ -563,10 +563,8 @@ def raster_calculator(bp, biomass, cortafuegos=None):
     return raster_calc["OUTPUT"]
 
 
-def sensibilidades_cortafuegos(DPV, capacidades, fuels, biomasa,cordenada):
-    import matplotlib.pyplot as plt
+def sensibilidades_cortafuegos(DPV, capacidades, fuels, biomasa, cordenada):
     from fire2a.raster import read_raster, write_raster
-    import geopandas
 
     expected_loss = []
     NPE = []
@@ -594,40 +592,40 @@ def sensibilidades_cortafuegos(DPV, capacidades, fuels, biomasa,cordenada):
     npe_values = [NPE[0], NPE[1], NPE[2]]
 
     # Crear el gráfico de barras
-    #plt.figure(figsize=(10, 6))
-    #plt.bar(sensibilidades, npe_values, color=["blue", "green", "red"])
+    # plt.figure(figsize=(10, 6))
+    # plt.bar(sensibilidades, npe_values, color=["blue", "green", "red"])
 
     # Añadir título y etiquetas
-    #plt.title("Net Protective Effect (NPE)")
-    #plt.xlabel("Capacidades")
-    #plt.ylabel("NPE")
+    # plt.title("Net Protective Effect (NPE)")
+    # plt.xlabel("Capacidades")
+    # plt.ylabel("NPE")
 
     # Mostrar y guardar el gráfico
-    #plt.grid(True)
-    #plt.show()
+    # plt.grid(True)
+    # plt.show()
 
-    cortafuego_ganador =  NPE.index(max(NPE)) 
+    cortafuego_ganador = NPE.index(max(NPE))
     data_cortafuego, info_cortafuego = read_raster(dir_cortafuegos[cortafuego_ganador], info=True)
 
     base_path = Path("cortafuegos")
     nombre_archivo = base_path / f"cortafuegos_{capacidades[cortafuego_ganador]}.tif"
-    #assert nombre_archivo.is_file()
+    # assert nombre_archivo.is_file()
     write_raster(data_cortafuego, str(nombre_archivo), "Gtiff", "EPSG:32718", info_cortafuego["Transform"])
 
 
-
-
-def proyectar_SCR(raster,cordenada):
+def proyectar_SCR(raster, cordenada):
     from qgis.core import QgsCoordinateReferenceSystem
+
     proyection = processing.run(
-                "gdal:assignprojection",
-    { 'CRS' : QgsCoordinateReferenceSystem(cordenada), 'INPUT' : raster })
+        "gdal:assignprojection", {"CRS": QgsCoordinateReferenceSystem(cordenada), "INPUT": raster}
+    )
     return proyection["OUTPUT"]
 
 
-def create_paisaje_con_cortafuegos(paisaje,cortafuegos):
-        from pathlib import Path
-        paisaje_con_cf = processing.run(
+def create_paisaje_con_cortafuegos(paisaje, cortafuegos):
+    from pathlib import Path
+
+    paisaje_con_cf = processing.run(
         "native:zonalstatisticsfb",
         {
             "COLUMN_PREFIX": "_",

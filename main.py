@@ -18,9 +18,10 @@ def simular_crecimiento():
        - rodales (lista de diccionarios con los rodales y sus atributos)
     """
 
-    from auxiliary import get_data, create_forest
-    import simulator
     from pathlib import Path
+
+    import simulator
+    from auxiliary import create_forest, get_data
 
     area_estudio = Path("test/data_modificada/proto_mod.shp")
     gdf = get_data(area_estudio)
@@ -32,6 +33,8 @@ def simular_crecimiento():
 
 
 gdf, rodales = simular_crecimiento()  # paso 1
+
+# crear carpete biomass y fuels guardarlas en carpeta cortafuegos
 
 
 def crear_opciones_cortafuegos(gdf, rodales):  # paso 2
@@ -50,9 +53,9 @@ def crear_opciones_cortafuegos(gdf, rodales):  # paso 2
 
     # import os
     # os.environ["QT_QPA_PLATFORM"] = "offscreen"
-    from simulator import read_toml
     from post_optimization import base_case
-    from use_of_QGIS import fuels_creation_cortafuegos, create_protection_value_shp
+    from simulator import read_toml
+    from use_of_QGIS import create_protection_value_shp, fuels_creation_cortafuegos
 
     config = read_toml("config.toml")  # leer el archivo de configuración
     config_opti = read_toml("config_opti.toml")  # leer el archivo de configuración
@@ -80,10 +83,10 @@ def calcular_sensibilidad_cortafuegos():  # paso 3
     outputs:
        - archivo tif del cortafuego ganador
     """
-    from use_of_QGIS import sensibilidades_cortafuegos
+    import os
     from pathlib import Path
 
-    import os
+    from use_of_QGIS import sensibilidades_cortafuegos
 
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
     cordenada = "EPSG:32718"
@@ -105,11 +108,12 @@ def rodales_con_cortafuegos(rodales):  # paso 4
     outputs:
        - rodales con cortafuegos (lista de diccionarios con los rodales y sus atributos)
     """
-    from use_of_QGIS import create_paisaje_con_cortafuegos
+    import os
+    from pathlib import Path
+
     from auxiliary import get_data
     from post_optimization import biomass_with_fire_breacks
-    from pathlib import Path
-    import os
+    from use_of_QGIS import create_paisaje_con_cortafuegos
 
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
     area_estudio = str(Path("test/data_modificada/proto_mod.shp"))
@@ -138,9 +142,8 @@ def optimizar_modelo(rodales, rodales_cf):  # paso 5
     outputs:
        - csv con las soluciones (rodales_sin_cortafuegos.csv y rodales_con_cortafuegos.csv)
     """
-    from simulator import read_toml, print_manejos_possibles
-    from tactico import model_t, model_t_cplex, generate_random_walk_prices
-    from pathlib import Path
+    from simulator import print_manejos_possibles, read_toml
+    from tactico import generate_random_walk_prices, model_t_cplex
 
     config = read_toml("config.toml")  # leer el archivo de configuración
     config_opti = read_toml("config_opti.toml")  # leer el archivo de configuración
@@ -152,10 +155,14 @@ def optimizar_modelo(rodales, rodales_cf):  # paso 5
     )  # genera precios aleatorios
 
     # optimiza el modelo sin incendios ni cortafuegos y crea un csv con las soluciones
-    valores_objetivo, soluciones = model_t_cplex(rodales, politicas, prices, "rodales_sin_cortafuegos")
+    valores_objetivo, soluciones = model_t_cplex(
+        rodales, politicas, prices, "rodales_sin_cortafuegos", config, config_opti
+    )
 
     # optimiza el modelo sinn incendios pero con cortafuegos y crea un csv con las soluciones
-    valores_objetivo_cf, soluciones_cf = model_t(rodales_cf, politicas, prices, "rodales_con_cortafuegos")
+    valores_objetivo_cf, soluciones_cf = model_t_cplex(
+        rodales_cf, politicas, prices, "rodales_con_cortafuegos", config, config_opti
+    )
 
     return valores_objetivo, valores_objetivo_cf, soluciones, soluciones_cf, prices
 
@@ -182,16 +189,16 @@ def quemar_soluciones(rodales, rodales_cf, soluciones, soluciones_cf, gdf, gdf_c
     """
     from post_optimization import filtro
     from simulator import read_toml
-    from use_of_QGIS import fuels_creation, burn_prob_sol
-    from pathlib import Path
+    from use_of_QGIS import burn_prob_sol, fuels_creation
 
+    config = read_toml("config.toml")  # leer el archivo de configuración
     config_opti = read_toml("config_opti.toml")  # leer el archivo de configuración
 
     filter = filtro(rodales, soluciones)  # f[soluciones][rodales]
     filtro_cf = filtro(rodales_cf, soluciones_cf)
 
-    fuels_creation(gdf, filter, "./soluciones/data_modificada", "rid")  # crea los archivos de combustibles
-    fuels_creation(gdf_cf, filtro_cf, "./cortafuegos/soluciones/data_modificada", "rid")
+    fuels_creation(gdf, filter, "./soluciones/data_modificada", config, "rid")  # crea los archivos de combustibles
+    fuels_creation(gdf_cf, filtro_cf, "./cortafuegos/soluciones/data_modificada", config, "rid")
     # crea los archivos de combustibles con cortafuegos
     bp_sin_cortafuegos = burn_prob_sol(
         config_opti["opti"]["soluciones"],
@@ -262,10 +269,10 @@ def ajustar_ganancias(filter, filtro_cf, bp_sin_cortafuegos, bp_con_cortafuegos,
         origen = "con cortafuegos"
         indice = indice_con_cortafuegos
 
-    print(f"La mejor solución es la solucion {indice+1} {origen}, y su valor es {mejor_valor}.")
+    print(f"La mejor solución es la solucion {indice + 1} {origen}, y su valor es {mejor_valor}.")
     return biomass_for_solution, biomass_for_solution_con_cortafuegos, vt_sin_cortafuegos, vt_con_cortafuegos
 
 
 biomass_for_solution, biomass_for_solution_con_cortafuegos, vt_sin_cortafuegos, vt_con_cortafuegos = ajustar_ganancias(
     filter, filtro_cf, bp_sin_cortafuegos, bp_con_cortafuegos, prices
-)  # paso 8 y 9
+)  # paso 8 y 9w
