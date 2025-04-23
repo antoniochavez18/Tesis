@@ -384,6 +384,10 @@ def fuels_creation_cortafuegos(gdf, caso_base, config):
     periodos = config["horizonte"]
     base_dir_biomass = Path("./cortafuegos/biomass")
     base_dir_fuels = Path("./cortafuegos/fuels")
+
+    # Crear carpetas si no existen
+    base_dir_biomass.mkdir(parents=True, exist_ok=True)
+    base_dir_fuels.mkdir(parents=True, exist_ok=True)
     gdf_temp["biomass"] = 0
     with tempfile.TemporaryDirectory() as temp_dir:
         # Crear un objeto Path para el archivo temporal .shp
