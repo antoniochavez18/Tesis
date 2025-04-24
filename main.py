@@ -187,9 +187,18 @@ def quemar_soluciones(rodales, rodales_cf, soluciones, soluciones_cf, gdf, gdf_c
          - archivos de combustibles sin cortafuegos
          - archivos de combustibles con cortafuegos
     """
+    from pathlib import Path
+
     from post_optimization import filtro
     from simulator import read_toml
     from use_of_QGIS import burn_prob_sol, fuels_creation
+
+    base_dir_fuels = Path("./soluciones/data_modificada")
+    base_dir_fuels_cf = Path("./cortafuegos/soluciones/data_modificada")
+
+    # Crear carpetas si no existen
+    base_dir_fuels.mkdir(parents=True, exist_ok=True)
+    base_dir_fuels_cf.mkdir(parents=True, exist_ok=True)
 
     config = read_toml("config.toml")  # leer el archivo de configuración
     config_opti = read_toml("config_opti.toml")  # leer el archivo de configuración
@@ -205,6 +214,7 @@ def quemar_soluciones(rodales, rodales_cf, soluciones, soluciones_cf, gdf, gdf_c
         ".tif",
         filter,
         "./soluciones/data_modificada",
+        config,
         corta_fuegos=False,
         id="rid",
         paisaje="./test/data_modificada/proto_mod.shp",
@@ -214,6 +224,7 @@ def quemar_soluciones(rodales, rodales_cf, soluciones, soluciones_cf, gdf, gdf_c
         ".tif",
         filtro_cf,
         "./cortafuegos/soluciones/data_modificada",
+        config,
         corta_fuegos=True,
         id="rid",
         paisaje="./test/data_modificada/proto_mod.shp",
