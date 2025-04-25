@@ -34,8 +34,6 @@ def simular_crecimiento(area_estudio=Path("test/data_modificada/proto_mod.shp"),
     return gdf, rodales
 
 
-gdf, rodales = simular_crecimiento()  # paso 1
-
 # crear carpete biomass y fuels guardarlas en carpeta cortafuegos
 
 
@@ -57,7 +55,8 @@ def crear_opciones_cortafuegos(gdf, rodales):  # paso 2
     # os.environ["QT_QPA_PLATFORM"] = "offscreen"
     from post_optimization import base_case
     from simulator import read_toml
-    from use_of_QGIS import create_protection_value_shp, fuels_creation_cortafuegos
+    from use_of_QGIS import (create_protection_value_shp,
+                             fuels_creation_cortafuegos)
 
     config = read_toml("config.toml")  # leer el archivo de configuración
     config_opti = read_toml("config_opti.toml")  # leer el archivo de configuración
@@ -68,9 +67,6 @@ def crear_opciones_cortafuegos(gdf, rodales):  # paso 2
         config, config_opti
     )  # quema y crea un raster con los DPV en valor presente (protection_value.tif)
     print("Se han creado los DPV para decidir cortafuegos, se guardan en la carpeta de cortafuegos")
-
-
-crear_opciones_cortafuegos(gdf, rodales)
 
 
 def calcular_sensibilidad_cortafuegos():  # paso 3
@@ -97,9 +93,6 @@ def calcular_sensibilidad_cortafuegos():  # paso 3
     path_fuels = str(Path("./cortafuegos/fuels/fuels_base_periodo_0.tif"))
     path_biomass = str(Path("./cortafuegos/biomass/biomass_base_periodo_0.tif"))
     sensibilidades_cortafuegos(path_DPV, capacidades, path_fuels, path_biomass, cordenada)
-
-
-calcular_sensibilidad_cortafuegos()
 
 
 def rodales_con_cortafuegos(rodales):  # paso 4
@@ -129,9 +122,6 @@ def rodales_con_cortafuegos(rodales):  # paso 4
     gdf_cf.rename(columns={"_mean": "prop_cf"}, inplace=True)
     rodales_cf = biomass_with_fire_breacks(rodales, gdf_cf, "rid")
     return rodales_cf, gdf_cf  # leer el paisaje con cortafuegos
-
-
-rodales_cf, gdf_cf = rodales_con_cortafuegos(rodales)
 
 
 def optimizar_modelo(rodales, rodales_cf):  # paso 5
@@ -167,11 +157,6 @@ def optimizar_modelo(rodales, rodales_cf):  # paso 5
     )
 
     return valores_objetivo, valores_objetivo_cf, soluciones, soluciones_cf, prices
-
-
-valores_objetivo, valores_objetivo_cf, soluciones, soluciones_cf, prices = optimizar_modelo(
-    rodales, rodales_cf
-)  # paso 5
 
 
 def quemar_soluciones(rodales, rodales_cf, soluciones, soluciones_cf, gdf, gdf_cf):  # paso 6 y 7
@@ -234,11 +219,6 @@ def quemar_soluciones(rodales, rodales_cf, soluciones, soluciones_cf, gdf, gdf_c
     return filter, filtro_cf, bp_sin_cortafuegos, bp_con_cortafuegos
 
 
-filter, filtro_cf, bp_sin_cortafuegos, bp_con_cortafuegos = quemar_soluciones(
-    rodales, rodales_cf, soluciones, soluciones_cf, gdf, gdf_cf
-)  # paso 6 y 7
-
-
 def ajustar_ganancias(filter, filtro_cf, bp_sin_cortafuegos, bp_con_cortafuegos, prices):
     """paso 8 y 9, ajustar las ganancias por solucion post incendios, viendo las nuevas ganancias
     inputs:
@@ -286,6 +266,34 @@ def ajustar_ganancias(filter, filtro_cf, bp_sin_cortafuegos, bp_con_cortafuegos,
     return biomass_for_solution, biomass_for_solution_con_cortafuegos, vt_sin_cortafuegos, vt_con_cortafuegos
 
 
-biomass_for_solution, biomass_for_solution_con_cortafuegos, vt_sin_cortafuegos, vt_con_cortafuegos = ajustar_ganancias(
-    filter, filtro_cf, bp_sin_cortafuegos, bp_con_cortafuegos, prices
-)  # paso 8 y 9w
+def main():
+
+    # paso 1: Primero se simula el crecimiento del bosque
+    gdf, rodales = simular_crecimiento()
+
+    # paso 2: luego se crean distintas opciones de cortafuegos
+    crear_opciones_cortafuegos(gdf, rodales)
+
+    # paso 3: se elige el mejor: analisis de sensibilidad (x variacion de area tratada) de cortafuegos usando NPE: net protection effect, eliges el de mayor NPE
+    calcular_sensibilidad_cortafuegos()
+
+    # paso 4: se optimizan los manejos,
+    rodales_cf, gdf_cf = rodales_con_cortafuegos(rodales)
+
+    # paso 5: se queman (simula incendios) las 10 soluciones cada anyo del horizonte
+    valores_objetivo, valores_objetivo_cf, soluciones, soluciones_cf, prices = optimizar_modelo(rodales, rodales_cf)
+
+    # paso 6 y 7: se adapta el burn probability para acumular informacion de anyos pasados
+    # se actualizan las ganancias
+    filter, filtro_cf, bp_sin_cortafuegos, bp_con_cortafuegos = quemar_soluciones(
+        rodales, rodales_cf, soluciones, soluciones_cf, gdf, gdf_cf
+    )
+
+    # paso 8 y 9w : se elije 1 de las 10 soluciones
+    biomass_for_solution, biomass_for_solution_con_cortafuegos, vt_sin_cortafuegos, vt_con_cortafuegos = (
+        ajustar_ganancias(filter, filtro_cf, bp_sin_cortafuegos, bp_con_cortafuegos, prices)
+    )
+
+
+if __name__ == "__main__":
+    main()
