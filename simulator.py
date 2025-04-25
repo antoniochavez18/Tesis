@@ -136,36 +136,36 @@ def obtener_datos_kitral(codigo_kitral: int) -> dict:
         especie = "pino"
         if codigo_kitral == 19:
             edad = [0, 4]
-            condicion = "sin manejo"
+            condicion = "PostRaleo1250-700"
         elif codigo_kitral == 20:
             edad = [4, 12]
-            condicion = "sin manejo"
+            condicion = "PostRaleo1250-700"
         elif codigo_kitral == 21:
             edad = [12, 18]
-            condicion = "sin manejo"
+            condicion = "PostRaleo1250-700"
         elif codigo_kitral == 22:
             edad = [18, 41]
-            condicion = "sin manejo"
+            condicion = "PostRaleo1250-700"
         elif codigo_kitral == 23:
             edad = [6, 12]
-            condicion = "con manejo"
+            condicion = "PostPodayRaleo700-300"
         elif codigo_kitral == 24:
             edad = [12, 18]
-            condicion = "con manejo"
+            condicion = "PostPodayRaleo700-300"
         elif codigo_kitral == 25:
             edad = [18, 41]
-            condicion = "con manejo"
+            condicion = "PostPodayRaleo700-300"
     elif codigo_kitral in [26, 27, 28]:
         especie = "eucalyptus"
         if codigo_kitral == 26:
             edad = [0, 4]
-            condicion = "sin manejo"
+            condicion = "SinManejo"
         elif codigo_kitral == 27:
             edad = [4, 11]
-            condicion = "sin manejo"
+            condicion = "SinManejo"
         elif codigo_kitral == 28:
             edad = [11, 31]
-            condicion = "sin manejo"
+            condicion = "SinManejo"
     else:
         return {"error": "Código Kitral desconocido"}
 
