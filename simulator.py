@@ -6,7 +6,7 @@ Una ejecucion genera un lista de rodales (:dict) con sus manejos (:dict), biomas
 
     rodales = [ ...
         {'rid': 9,           # rodal id
-         'growth_model_id': 24,          # model id
+         'growth_mid': 24,          # model id
          'edad_inicial': 17,
          'edad_final': 27,
          'ha': 14,
@@ -229,7 +229,7 @@ def generate_random_forest(config=None, models=None):
         ha = rng.integers(*config["random"]["has"])
         rodal = {
             "rid": r,
-            "growth_model_id": model["id"],
+            "growth_mid": model["id"],
             "edad_inicial": e0,
             "edad_final": e1,
             "ha": ha,
@@ -248,7 +248,7 @@ def generate_forest(config=None, filepath="bosque_data.csv"):
         ha = r["ha"]
         rodal = {
             "rid": r["rid"],  # Identificador único para cada rodal
-            "growth_model_id": r["growth_model_id"],
+            "growth_mid": r["growth_mid"],
             "edad_inicial": e0,
             "edad_final": e1,
             "ha": ha,
@@ -261,7 +261,7 @@ def generate_forest(config=None, filepath="bosque_data.csv"):
 def generate(config=None, models=None, rodales=None):
     """Genera los rodales con las biomasas generadas por cada año, dependiendo de su manejo y edad de crecimiento, junto con la biomasa para vender y el codigo kitral"""
     for rodal in rodales:
-        indices = np.where(models["id"] == rodal["growth_model_id"])[0]
+        indices = np.where(models["id"] == rodal["growth_mid"])[0]
         model = models[indices][0]
         # model = rng.choice(models)
         # print(model)
@@ -536,7 +536,7 @@ def write(rodales):
     np.savetxt("vendible.csv", vd.T, delimiter=",", header=names, comments="")
     np.savetxt("codigo_kitral.csv", kt.T, delimiter=",", header=names, comments="", fmt="%s")
 
-    bos_names = ["rid", "growth_model_id", "edad_inicial", "ha"]  # aprender hacer formato decente
+    bos_names = ["rid", "growth_mid", "edad_inicial", "ha"]  # aprender hacer formato decente
     bos = np.array([tuple(r[k] for k in bos_names) for r in rodales])
     np.savetxt("bosque.csv", bos, delimiter=",", header=",".join(bos_names), comments="", fmt="%d")
 
