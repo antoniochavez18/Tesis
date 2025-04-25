@@ -48,7 +48,7 @@ def get_data(filepath=".\\test\\data_base\\proto.shp"):
     datasource = None"""
 
 
-def create_forest(gdf, id="fid", outfile="bosque_data.csv"):
+def create_forest(gdf, id="fid", mid="growth_mid", outfile="bosque_data.csv"):
     if "area_ha" not in gdf.columns:
         gdf["area_ha"] = gdf.geometry.area / 1e4
     data_rodales = gdf.dropna(subset=["edad"])
@@ -63,7 +63,7 @@ def create_forest(gdf, id="fid", outfile="bosque_data.csv"):
         ha = r["area_ha"]
         rodal = {
             "rid": r[id],
-            "growth_mid": r["growth_mid"],
+            "growth_mid": r[mid],
             "edad_inicial": e0,
             "ha": ha,
         }
