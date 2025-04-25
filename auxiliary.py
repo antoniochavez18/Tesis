@@ -51,7 +51,7 @@ def get_data(filepath=".\\test\\data_base\\proto.shp"):
 def create_forest(gdf, id="fid",outfile="bosque_data.csv"):
     data_rodales = gdf.dropna(subset=["edad"])
     data_rodales_2 = data_rodales.loc[data_rodales["area_ha"] > 0]
-    bos_names = ["rid", "mid", "edad_inicial", "ha"]  # aprender hacer formato decente
+    bos_names = ["rid", "growth_model_id", "edad_inicial", "ha"]  # aprender hacer formato decente
     rodales = []
 
     for idx, r in data_rodales_2.iterrows():
@@ -61,7 +61,7 @@ def create_forest(gdf, id="fid",outfile="bosque_data.csv"):
         ha = r["area_ha"]
         rodal = {
             "rid": r[id],  # r["fid"] en caso habitual
-            "mid": r["id"],
+            "growth_model_id": r["id"],
             "edad_inicial": e0,
             "ha": ha,
         }
@@ -69,11 +69,9 @@ def create_forest(gdf, id="fid",outfile="bosque_data.csv"):
 
     bos = np.array(
         [tuple(r[k] for k in bos_names) for r in rodales],
-        dtype=[("rid", "i4"), ("mid", "i4"), ("edad_inicial", "i4"), ("ha", "f4")],
+        dtype=[("rid", "i4"), ("growth_model_id", "i4"), ("edad_inicial", "i4"), ("ha", "f4")],
     )
-    np.savetxt(
-        outfile, bos, delimiter=",", header=",".join(bos_names), comments="", fmt=["%d", "%d", "%d", "%.2f"]
-    )
+    np.savetxt(outfile, bos, delimiter=",", header=",".join(bos_names), comments="", fmt=["%d", "%d", "%d", "%.2f"])
 
 
 def plot_1_id_model(horizon: int = 40, show=True, save=False, target_id: int = 30):

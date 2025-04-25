@@ -50,7 +50,7 @@ def filtro(rodales, soluciones):
             rodal_data = {}
             rodal_data = {
                 "rid": rodales[indice]["rid"],
-                "mid": rodales[indice]["mid"],
+                "growth_model_id": rodales[indice]["growth_model_id"],
                 "edad_inicial": rodales[indice]["edad_inicial"],
             }
 
@@ -159,7 +159,7 @@ def base_case(rodales):
         # Inicializamos un diccionario por rodal para almacenar "codigo_kitral" y "vendible"
         rodal_data = {
             "rid": rodales[r]["rid"],
-            "mid": rodales[r]["mid"],
+            "growth_model_id": rodales[r]["growth_model_id"],
             "edad_inicial": rodales[r]["edad_inicial"],
             "codigo_kitral": rodales[r]["manejos"][0]["codigo_kitral"],
             "biomass": rodales[r]["manejos"][0]["biomass"],
