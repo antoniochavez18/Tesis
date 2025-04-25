@@ -11,7 +11,7 @@ Programmers must:
 2. load the QGIS python environment to run
 
 Helpful commands:
-call "%USERPROFILE%\source\pyenv\python-qgis-cmd.bat"
+call "%USERPROFILE%\\source\\pyenv\\python-qgis-cmd.bat"
 %autoindent
 ipython
 
@@ -120,7 +120,7 @@ def burn_prob(apath, temp_dir, fire_breaks=None, paisaje=".\\test\\data_base\\pr
     Args:
         apath (str): Path to the fuel raster file.
         temp_dir (str): Path to the temporary directory for storing intermediate files.
-        fire_breacks (str, optional): Path to the fire breaks raster file. Defaults to None.
+        fire_breaks (str, optional): Path to the fire breaks raster file. Defaults to None.
 
     Returns:
         DataFrame: DataFrame containing burn probabilities for each rodal.
@@ -196,7 +196,15 @@ def burn_prob(apath, temp_dir, fire_breaks=None, paisaje=".\\test\\data_base\\pr
 
 
 def burn_prob_sol(
-    num_soluciones, formato, filtro, input, config, corta_fuegos=False, id="fid", paisaje="test\\data_base\\proto.shp"
+    num_soluciones,
+    formato,
+    filtro,
+    input,
+    config,
+    corta_fuegos=False,
+    id="fid",
+    paisaje="test\\data_base\\proto.shp",
+    cortafuegos=None,
 ):
     """
     Calculate burn probability for multiple solutions over different periods.
@@ -231,7 +239,7 @@ def burn_prob_sol(
                     # Llamar a la función `burn_prob` con la ruta correcta
                     bp_rodales = burn_prob(str(path_p), str(temp_dir_path), None, paisaje)
                 else:
-                    fire_breaks = r".\\cortafuegos\\cortafuego_2%.tif"
+                    fire_breaks = cortafuegos
                     bp_rodales = burn_prob(str(path_p), str(temp_dir_path), fire_breaks, paisaje)
 
             else:
@@ -485,7 +493,7 @@ def burn_prob_para_sensibilidad(apath, fire_breaks=None):
     Args:
         apath (str): Path to the fuel raster file.
         temp_dir (str): Path to the temporary directory for storing intermediate files.
-        fire_breacks (str, optional): Path to the fire breaks raster file. Defaults to None.
+        fire_breaks (str, optional): Path to the fire breaks raster file. Defaults to None.
 
     Returns:
         DataFrame: DataFrame containing burn probabilities for each rodal.
@@ -568,6 +576,7 @@ def raster_calculator(bp, biomass, cortafuegos=None):
 
 
 def sensibilidades_cortafuegos(DPV, capacidades, fuels, biomasa, cordenada):
+    import matplotlib.pyplot as plt
     from fire2a.raster import read_raster, write_raster
 
     expected_loss = []
@@ -586,7 +595,7 @@ def sensibilidades_cortafuegos(DPV, capacidades, fuels, biomasa, cordenada):
         expected_loss.append(np.sum(expected_loss_case))
 
     burn_prob_sin_manejos = burn_prob_para_sensibilidad(fuels)
-    proyectar_SCR(burn_prob_sin_manejos, "EPSG:32718")
+    proyectar_SCR(burn_prob_sin_manejos, cordenada)
     expected_loss_base_case, _ = read_raster((raster_calculator(burn_prob_sin_manejos, biomasa)), info=False)
     expected_loss_base_case = np.where(expected_loss_base_case < 0, 0, expected_loss_base_case)
     EL_base_case = np.sum(expected_loss_base_case)
@@ -596,18 +605,18 @@ def sensibilidades_cortafuegos(DPV, capacidades, fuels, biomasa, cordenada):
     npe_values = [NPE[0], NPE[1], NPE[2]]
 
     # Crear el gráfico de barras
-    # plt.figure(figsize=(10, 6))
-    # plt.bar(sensibilidades, npe_values, color=["blue", "green", "red"])
+    plt.figure(figsize=(10, 6))
+    plt.bar(sensibilidades, npe_values, color=["blue", "green", "red"])
 
     # Añadir título y etiquetas
-    # plt.title("Net Protective Effect (NPE)")
-    # plt.xlabel("Capacidades")
-    # plt.ylabel("NPE")
+    plt.title("Net Protective Effect (NPE)")
+    plt.xlabel("Capacidades")
+    plt.ylabel("NPE")
 
     # Mostrar y guardar el gráfico
-    # plt.grid(True)
+    plt.grid(True)
     # plt.show()
-
+    plt.savefig("sensibilidad_cortafuegos.png", dpi=300)
     cortafuego_ganador = NPE.index(max(NPE))
     data_cortafuego, info_cortafuego = read_raster(dir_cortafuegos[cortafuego_ganador], info=True)
 
@@ -615,6 +624,7 @@ def sensibilidades_cortafuegos(DPV, capacidades, fuels, biomasa, cordenada):
     nombre_archivo = base_path / f"cortafuegos_{capacidades[cortafuego_ganador]}.tif"
     # assert nombre_archivo.is_file()
     write_raster(data_cortafuego, str(nombre_archivo), "Gtiff", "EPSG:32718", info_cortafuego["Transform"])
+    return nombre_archivo
 
 
 def proyectar_SCR(raster, cordenada):
