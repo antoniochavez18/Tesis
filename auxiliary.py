@@ -62,8 +62,8 @@ def create_forest(gdf, id="fid", outfile="bosque_data.csv"):
         e0 = r["edad"]
         ha = r["area_ha"]
         rodal = {
-            "rid": r[id],  # r["fid"] en caso habitual
-            "growth_mid": r["id"],
+            "rid": r[id],
+            "growth_mid": r["growth_mid"],
             "edad_inicial": e0,
             "ha": ha,
         }
