@@ -288,7 +288,7 @@ def main():
     # paso 6 y 7: se adapta el burn probability para acumular informacion de anyos pasados
     # se actualizan las ganancias
     filter, filtro_cf, bp_sin_cortafuegos, bp_con_cortafuegos = quemar_soluciones(
-        rodales, rodales_cf, soluciones, soluciones_cf, gdf, gdf_cf
+        rodales, rodales_cf, soluciones, soluciones_cf, gdf, gdf_cf, cortafuegos
     )
 
     # paso 8 y 9w : se elije 1 de las 10 soluciones

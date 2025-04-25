@@ -301,13 +301,9 @@ def model_t(rodales, politicas, prices, dataset_name):
     return valores_objetivo, csv_rows
 
 
-# Este código es una adaptación de un modelo de optimización de Gurobi a CPLEX usando docplex
-from docplex.mp.model import Model
-
-# Este código es una versión adaptada del modelo Gurobi a CPLEX usando docplex, con el mismo número de soluciones
-
-
 def model_t_cplex(rodales, politicas, prices, dataset_name, config, config_opti):
+    from docplex.mp.model import Model
+
     tasa = config_opti["opti"]["tasa"]
     biom_0 = calc_biomass_0(rodales)
     no_pol = no_poli(rodales)
