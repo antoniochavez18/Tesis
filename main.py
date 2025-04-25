@@ -1,8 +1,10 @@
 #!python
 """Este codigo es el encargado de correr todos los pasos de los procesos del README"""
 
+from pathlib import Path
 
-def simular_crecimiento():
+
+def simular_crecimiento(area_estudio=Path("test/data_modificada/proto_mod.shp"), id="fid", outfile="bosque_data.csv"):
     """paso 1, simular crecimiento de rodales y crear el bosque
 
     si se requiere bosque al azar agregar "--random" en simulator.main
@@ -10,24 +12,24 @@ def simular_crecimiento():
     simulator y auxiliary son modulos de https://github.com/fire2a/growth
 
     inputs:
-       - area de estudio (shapefile)
-       - archivo de configuracion (config.toml)
+       - area de estudio (shapefile) TODO atributos necesarios son:
+           - area_ha (area del rodal)
+       - nombre de columna o atributo que identifica el rodal (id)
+       - archivo de configuracion simulador de crecimiento (config.toml)
     outputs:
        - bosque_data.csv (csv con los rodales y sus atributos)
        - gdf (geopandas dataframe con los rodales y sus atributos)
        - rodales (lista de diccionarios con los rodales y sus atributos)
     """
 
-    from pathlib import Path
-
     import simulator
     from auxiliary import create_forest, get_data
 
-    area_estudio = Path("test/data_modificada/proto_mod.shp")
+    assert area_estudio.is_file(), f"El archivo {area_estudio} no existe"
     gdf = get_data(area_estudio)
 
-    create_forest(gdf, id="rid", outfile="bosque_data.csv")
-    rodales = simulator.main(["config.toml", "-m", "tabla.csv", "-d", "bosque_data.csv", "-s"])
+    create_forest(gdf, id=id, outfile=outfile)
+    rodales = simulator.main(["config.toml", "-m", "tabla.csv", "-d", str(outfile), "-s"])
 
     return gdf, rodales
 
