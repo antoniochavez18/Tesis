@@ -1,7 +1,6 @@
-import ast
-import pandas as pd
-import numpy as np
 import sys
+
+import numpy as np
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -170,7 +169,7 @@ def base_case(rodales):
     return base_case_data
 
 
-def biomass_with_fire_breacks(rodales, gdf_cf, id="fid"):
+def biomass_with_fire_breaks(rodales, gdf_cf, id="fid"):
     import copy
 
     # Crear una copia profunda para evitar modificar el original
