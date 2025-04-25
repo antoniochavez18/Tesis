@@ -49,6 +49,8 @@ def get_data(filepath=".\\test\\data_base\\proto.shp"):
 
 
 def create_forest(gdf, id="fid", outfile="bosque_data.csv"):
+    if "area_ha" not in gdf.columns:
+        gdf["area_ha"] = gdf.geometry.area / 1e4
     data_rodales = gdf.dropna(subset=["edad"])
     data_rodales_2 = data_rodales.loc[data_rodales["area_ha"] > 0]
     bos_names = ["rid", "growth_mid", "edad_inicial", "ha"]  # aprender hacer formato decente
