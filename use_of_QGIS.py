@@ -72,10 +72,14 @@ from processing.core.Processing import Processing
 Processing.initialize()
 
 if platform_system() == "Windows":
-    sys.path.append("C:\\Users\\xunxo\\AppData\\Roaming\\QGIS\\QGIS3\\profiles\\default\\python\\plugins")
+    sys.path.append(
+        "C:\\Users\\xunxo\\AppData\\Roaming\\QGIS\\QGIS3\\profiles\\default\\python\\plugins"
+    )
 else:
     user = environ["USER"]
-    sys.path.append("/home/" + user + "/.local/share/QGIS/QGIS3/profiles/default/python/plugins/")
+    sys.path.append(
+        "/home/" + user + "/.local/share/QGIS/QGIS3/profiles/default/python/plugins/"
+    )
 # Add the algorithm provider
 from fireanalyticstoolbox.fireanalyticstoolbox_provider import FireToolboxProvider
 
@@ -113,7 +117,9 @@ def fuels_tif(temp_path, category, output):
     )
 
 
-def burn_prob(apath, temp_dir, fire_breaks=None, paisaje=".\\test\\data_base\\proto.shp"):
+def burn_prob(
+    apath, temp_dir, fire_breaks=None, paisaje=".\\test\\data_base\\proto.shp"
+):
     """
     Simulate burn probability using the specified fuel raster and optional fire breaks.
 
@@ -125,6 +131,7 @@ def burn_prob(apath, temp_dir, fire_breaks=None, paisaje=".\\test\\data_base\\pr
     Returns:
         DataFrame: DataFrame containing burn probabilities for each rodal.
     """
+    print("antes de simular")
     # Crear una nueva ruta para el archivo .shp en el directorio temporal
     temp_output_path = Path(temp_dir) / "mean_bp.shp"
     result = processing.run(
@@ -147,7 +154,7 @@ def burn_prob(apath, temp_dir, fire_breaks=None, paisaje=".\\test\\data_base\\pr
             "InstanceDirectory": "TEMPORARY_OUTPUT",
             "InstanceInProject": False,
             "LiveAndDeadFuelMoistureContentScenario": 2,
-            "NumberOfSimulations": 50,
+            "NumberOfSimulations": 5,
             "OtherCliArgs": "",
             "OutputOptions": [1, 2, 3, 4],
             "RandomNumberGeneratorSeed": 123,
@@ -164,7 +171,8 @@ def burn_prob(apath, temp_dir, fire_breaks=None, paisaje=".\\test\\data_base\\pr
         pass
     else:
         print("eerrrrr")
-
+    print("despues de simular")
+    print("antes de procesar")
     bundle = processing.run(
         "fire2a:simulationresultsprocessing",
         {
@@ -175,7 +183,8 @@ def burn_prob(apath, temp_dir, fire_breaks=None, paisaje=".\\test\\data_base\\pr
             "ResultsDirectory": result["ResultsDirectory"],
         },
     )
-
+    print("despues de procesar")
+    print("antes de calcular BP")
     raster_bp = processing.run(
         "native:zonalstatisticsfb",
         {
@@ -191,7 +200,7 @@ def burn_prob(apath, temp_dir, fire_breaks=None, paisaje=".\\test\\data_base\\pr
 
     burn_prob = get_data(str(raster_bp["OUTPUT"]))
     burn_prob = burn_prob.fillna(0)
-
+    print("despues de calcular BP")
     return burn_prob
 
 
@@ -221,41 +230,50 @@ def burn_prob_sol(
     """
     periodos = config["horizonte"]
     bp = []
-    temp_dir = tempfile.TemporaryDirectory()
-    # Crear una nueva ruta para el directorio temporal
-    temp_dir_path = Path(temp_dir.name)
     input_path = Path(input)
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Crear un objeto Path para el archivo temporal .shp
+        # Guardar el GeoDataFrame como un shapefile
+        # Crear una nueva ruta para el directorio temporal
 
-    # Iterar sobre todas las soluciones
-    for s in range(num_soluciones):
-        solucion_bp = []
-        # Iterar sobre todos los periodos para la solución actual
-        for t in range(periodos):
-            # Construir la ruta al archivo utilizando f-strings y Path
-            path_p = input_path / f"fuels_solucion_{s}_periodo_{t}{formato}"
+        # Iterar sobre todas las soluciones
+        for s in range(num_soluciones):
+            solucion_bp = []
+            # Iterar sobre todos los periodos para la solución actual
+            for t in range(periodos):
+                # Construir la ruta al archivo utilizando f-strings y Path
+                path_p = input_path / f"fuels_solucion_{s}_periodo_{t}{formato}"
+                print(solucion, "s y periodo", t)
+                if path_p.exists():
+                    if corta_fuegos == False:
+                        # Llamar a la función `burn_prob` con la ruta correcta
+                        bp_rodales = burn_prob(
+                            str(path_p), str(temp_dir), None, paisaje
+                        )
+                    else:
+                        fire_breaks = cortafuegos
+                        bp_rodales = burn_prob(
+                            str(path_p), str(temp_dir), fire_breaks, paisaje
+                        )
 
-            if path_p.exists():
-                if corta_fuegos == False:
-                    # Llamar a la función `burn_prob` con la ruta correcta
-                    bp_rodales = burn_prob(str(path_p), str(temp_dir_path), None, paisaje)
                 else:
-                    fire_breaks = cortafuegos
-                    bp_rodales = burn_prob(str(path_p), str(temp_dir_path), fire_breaks, paisaje)
+                    print(f"File {path_p} does not exist.")
+                    continue  # Saltar a la siguiente iteración si el archivo no existe
 
-            else:
-                print(f"File {path_p} does not exist.")
-                continue  # Saltar a la siguiente iteración si el archivo no existe
+                bp_periodo = []
+                for r in range(len(filtro[0])):
+                    # Filtrar por el 'fid' de cada rodal y obtener el valor de "_mean"
+                    bp_valor = bp_rodales.loc[
+                        bp_rodales[id] == filtro[s][r]["rid"], "_mean"
+                    ].values
+                    if len(bp_valor) > 0:
+                        bp_periodo.append(bp_valor[0])
+                    else:
+                        bp_periodo.append(
+                            None
+                        )  # Manejar casos donde no se encuentra el 'fid'
 
-            bp_periodo = []
-            for r in range(len(filtro[0])):
-                # Filtrar por el 'fid' de cada rodal y obtener el valor de "_mean"
-                bp_valor = bp_rodales.loc[bp_rodales[id] == filtro[s][r]["rid"], "_mean"].values
-                if len(bp_valor) > 0:
-                    bp_periodo.append(bp_valor[0])
-                else:
-                    bp_periodo.append(None)  # Manejar casos donde no se encuentra el 'fid'
-
-            solucion_bp.append(bp_periodo)
+                solucion_bp.append(bp_periodo)
 
         # Reorganizar para tener una lista de listas (por rodal) con valores por periodo
         reorganizado = list(map(list, zip(*solucion_bp)))
@@ -278,7 +296,9 @@ def burn_prob_sol(
         # Guardar los promedios de la solución actual en la lista final
         bp.append(promedios_solucion)
 
-    return bp  # Devuelve bp[s][r][t] donde s es la solución, r es el rodal y t el periodo
+    return (
+        bp  # Devuelve bp[s][r][t] donde s es la solución, r es el rodal y t el periodo
+    )
 
 
 def fuels_creation(gdf, filtro, output, config, id="fid"):
@@ -286,30 +306,33 @@ def fuels_creation(gdf, filtro, output, config, id="fid"):
     gdf_temp = gdf.copy()
     periodos = config["horizonte"]
     base_dir = Path(output)
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Crear un objeto Path para el archivo temporal .shp
+        # Guardar el GeoDataFrame como un shapefile
+        for s in range(len(filtro)):  # soluciones
+            for t in range(periodos):
+                for r in range(len(filtro[0])):  # rodales
+                    gdf_temp.loc[gdf_temp[id] == filtro[s][r]["rid"], "kitral_cod"] = (
+                        filtro[s][r]["codigo_kitral"][t]
+                    )
+                # Directorio base
 
-    for s in range(len(filtro)):  # soluciones
-        for t in range(periodos):
-            for r in range(len(filtro[0])):  # rodales
-                gdf_temp.loc[gdf_temp[id] == filtro[s][r]["rid"], "kitral_cod"] = filtro[s][r]["codigo_kitral"][t]
-            # Directorio base
+                # Crear un objeto Path para el archivo temporal .shp
+                shp_path = Path(temp_dir) / "temp_file.shp"
+                # Guardar el GeoDataFrame como un shapefile
+                gdf_temp.to_file(shp_path)
 
-            temp_dir = tempfile.TemporaryDirectory()
-            # Crear un objeto Path para el archivo temporal .shp
-            shp_path = Path(temp_dir.name) / "temp_file.shp"
-            # Guardar el GeoDataFrame como un shapefile
-            gdf_temp.to_file(shp_path)
+                # Nombre del archivo con variables dinámicas
+                file_name = f"fuels_solucion_{s}_periodo_{t}.tif"
+                # Ruta completa al archivo
 
-            # Nombre del archivo con variables dinámicas
-            file_name = f"fuels_solucion_{s}_periodo_{t}.tif"
-            # Ruta completa al archivo
+                base_path = base_dir / file_name
 
-            base_path = base_dir / file_name
+                # Eliminar el archivo si ya existe para asegurarse de que se reescriba
+                if base_path.exists():
+                    base_path.unlink()
 
-            # Eliminar el archivo si ya existe para asegurarse de que se reescriba
-            if base_path.exists():
-                base_path.unlink()
-
-            fuels_tif(str(shp_path), "kitral_cod", base_path)
+                fuels_tif(str(shp_path), "kitral_cod", base_path)
     print("combustibles en carpeta de soluciones")
 
 
@@ -366,7 +389,7 @@ def protection_value(path_fuels, path_biomass):
             "ResultsDirectory": res_dic,
         },
     )
-    print()
+    print("despues de procesar")
     messages = "Messages/messages.pickle"
     message_path = str(Path(res_dic) / messages)
     print("antes de calcular DPV")
@@ -403,8 +426,12 @@ def fuels_creation_cortafuegos(gdf, caso_base, config):
 
         for t in range(periodos):
             for r in range(len(caso_base)):  # rodales
-                gdf_temp.loc[gdf_temp["fid"] == caso_base[r]["rid"], "kitral_cod"] = caso_base[r]["codigo_kitral"][t]
-                gdf_temp.loc[gdf_temp["fid"] == caso_base[r]["rid"], "biomass"] = caso_base[r]["biomass"][t]
+                gdf_temp.loc[gdf_temp["fid"] == caso_base[r]["rid"], "kitral_cod"] = (
+                    caso_base[r]["codigo_kitral"][t]
+                )
+                gdf_temp.loc[gdf_temp["fid"] == caso_base[r]["rid"], "biomass"] = (
+                    caso_base[r]["biomass"][t]
+                )
             # Directorio base
 
             # Crear un objeto Path para el archivo temporal .shp
@@ -429,7 +456,9 @@ def fuels_creation_cortafuegos(gdf, caso_base, config):
             fuels_tif(shp_path, "kitral_cod", base_path_fuels)  # se escribe los fuels
             fuels_tif(shp_path, "biomass", base_path_biomass)  # se escriben los biomass
 
-    print("combustibles en  carpeta cortafuegos/fuels y biomasa en carpeta de cortafuegos/biomass")
+    print(
+        "combustibles en  carpeta cortafuegos/fuels y biomasa en carpeta de cortafuegos/biomass"
+    )
 
 
 def create_protection_value_shp(config, config_opti):
@@ -440,7 +469,9 @@ def create_protection_value_shp(config, config_opti):
     for t in range(periodos):
         base_path_fuels = base_path / f"fuels/fuels_base_periodo_{t}.tif"
         base_path_biomass = base_path / f"biomass/biomass_base_periodo_{t}.tif"
-        dpv_periodo, info = protection_value(str(base_path_fuels), str(base_path_biomass))
+        dpv_periodo, info = protection_value(
+            str(base_path_fuels), str(base_path_biomass)
+        )
         dpv.append(dpv_periodo)
 
     # Tasa de descuento
@@ -457,7 +488,9 @@ def create_protection_value_shp(config, config_opti):
     # preguntar, ese optimizador lo hace respecto a rodal o pixel, ademas como agregarle un raster como columna al shp (puedo sacar promedio igual pero queria saber si hay una mejor manera)
     nombre_archivo = base_path / "protection_value.tif"
     assert nombre_archivo.is_file()
-    write_raster(van_result, str(nombre_archivo), "Gtiff", "EPSG:32718", info["Transform"])
+    write_raster(
+        van_result, str(nombre_archivo), "Gtiff", "EPSG:32718", info["Transform"]
+    )
     # Guardar los promedios de la solución actual en la lista final
 
     print("shp con protecition value en carpeta cortafuegos")
@@ -478,7 +511,7 @@ def crear_cortafuegos(DPV, capacidad):
             "NEOS_SOLVER": "cplex",
             "OUT_LAYER": "TEMPORARY_OUTPUT",
             "RATIO": capacidad,
-            "SOLVER": "cplex: mipgap=0.005 timelimit=300",
+            "SOLVER": "cplex: mipgap=0.005 timelimit=300 MUST SET EXECUTABLE",
             "VALUE": DPV,
             "WEIGHT": None,
         },
@@ -590,14 +623,20 @@ def sensibilidades_cortafuegos(DPV, capacidades, fuels, biomasa, cordenada):
         proyectar_SCR(burn_prob, cordenada)
         proyectar_SCR(fuels, cordenada)
         proyectar_SCR(biomasa, cordenada)
-        expected_loss_case, _ = read_raster((raster_calculator(burn_prob, biomasa, cortafuegos)), info=False)
+        expected_loss_case, _ = read_raster(
+            (raster_calculator(burn_prob, biomasa, cortafuegos)), info=False
+        )
         expected_loss_case = np.where(expected_loss_case < 0, 0, expected_loss_case)
         expected_loss.append(np.sum(expected_loss_case))
 
     burn_prob_sin_manejos = burn_prob_para_sensibilidad(fuels)
     proyectar_SCR(burn_prob_sin_manejos, cordenada)
-    expected_loss_base_case, _ = read_raster((raster_calculator(burn_prob_sin_manejos, biomasa)), info=False)
-    expected_loss_base_case = np.where(expected_loss_base_case < 0, 0, expected_loss_base_case)
+    expected_loss_base_case, _ = read_raster(
+        (raster_calculator(burn_prob_sin_manejos, biomasa)), info=False
+    )
+    expected_loss_base_case = np.where(
+        expected_loss_base_case < 0, 0, expected_loss_base_case
+    )
     EL_base_case = np.sum(expected_loss_base_case)
     for s in range(len(expected_loss)):
         NPE.append(EL_base_case - expected_loss[s])
@@ -618,12 +657,20 @@ def sensibilidades_cortafuegos(DPV, capacidades, fuels, biomasa, cordenada):
     # plt.show()
     plt.savefig("sensibilidad_cortafuegos.png", dpi=300)
     cortafuego_ganador = NPE.index(max(NPE))
-    data_cortafuego, info_cortafuego = read_raster(dir_cortafuegos[cortafuego_ganador], info=True)
+    data_cortafuego, info_cortafuego = read_raster(
+        dir_cortafuegos[cortafuego_ganador], info=True
+    )
 
     base_path = Path("cortafuegos")
     nombre_archivo = base_path / f"cortafuegos_{capacidades[cortafuego_ganador]}.tif"
     # assert nombre_archivo.is_file()
-    write_raster(data_cortafuego, str(nombre_archivo), "Gtiff", "EPSG:32718", info_cortafuego["Transform"])
+    write_raster(
+        data_cortafuego,
+        str(nombre_archivo),
+        "Gtiff",
+        "EPSG:32718",
+        info_cortafuego["Transform"],
+    )
     return nombre_archivo
 
 
@@ -631,7 +678,8 @@ def proyectar_SCR(raster, cordenada):
     from qgis.core import QgsCoordinateReferenceSystem
 
     proyection = processing.run(
-        "gdal:assignprojection", {"CRS": QgsCoordinateReferenceSystem(cordenada), "INPUT": raster}
+        "gdal:assignprojection",
+        {"CRS": QgsCoordinateReferenceSystem(cordenada), "INPUT": raster},
     )
     return proyection["OUTPUT"]
 
@@ -645,7 +693,9 @@ def create_paisaje_con_cortafuegos(paisaje, cortafuegos):
             "COLUMN_PREFIX": "_",
             "INPUT": paisaje,
             "INPUT_RASTER": cortafuegos,
-            "OUTPUT": str(Path("cortafuegos/data_cortafuegos/data_modificada/proto_mod.shp")),
+            "OUTPUT": str(
+                Path("cortafuegos/data_cortafuegos/data_modificada/proto_mod.shp")
+            ),
             "RASTER_BAND": 1,
             "STATISTICS": [2, 6],
         },
