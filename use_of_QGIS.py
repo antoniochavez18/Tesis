@@ -21,72 +21,59 @@ https://gis.stackexchange.com/a/408738
 https://gis.stackexchange.com/a/172849
 """
 
-import sys
-import tempfile
-from os import environ
-from pathlib import Path
-from platform import system as platform_system
 
-import numpy as np
-from qgis.core import QgsApplication
+def init_qgis():
+    """
+    Initialize QGIS environment and load processing plugin.
+    This function sets up the QGIS application and adds the
+    processing plugin to the QGIS processing registry.
+    It also sets the prefix path for QGIS based on the operating system.
+    """
+    import sys
+    from os import environ
+    from platform import system as platform_system
 
-# if sys.version_info >= (3, 11):
-#     import tomllib
+    from qgis.core import QgsApplication
 
-#     with open("config.toml", "rb") as f:
-#         config = tomllib.load(f)
-# else:
-#     import toml
+    #
+    ## PART 1
+    #
+    if platform_system() == "Windows":
+        QgsApplication.setPrefixPath("C:\\PROGRA~1\\QGIS33~1.2", True)
+    else:
+        QgsApplication.setPrefixPath("/usr", True)
+    qgs = QgsApplication([], False)
+    qgs.initQgis()
 
-#     config = toml.load("config.toml")
+    # Append the path where processing plugin can be found
+    if platform_system() == "Windows":
+        sys.path.append("C:\\PROGRA~1\\QGIS33~1.2\\apps\\qgis\\python\\plugins")
+    else:
+        sys.path.append("/usr/share/qgis/python/plugins")
 
-# if sys.version_info >= (3, 11):
-#     import tomllib
+    from processing.core.Processing import Processing
 
-#     with open("config_opti.toml", "rb") as f:
-#         config_opti = tomllib.load(f)
-# else:
-#     import toml
+    Processing.initialize()
 
-#     config_opti = toml.load("config_opti.toml")
+    if platform_system() == "Windows":
+        sys.path.append("C:\\Users\\xunxo\\AppData\\Roaming\\QGIS\\QGIS3\\profiles\\default\\python\\plugins")
+    else:
+        user = environ["USER"]
+        sys.path.append("/home/" + user + "/.local/share/QGIS/QGIS3/profiles/default/python/plugins/")
+    # Add the algorithm provider
+    from fireanalyticstoolbox.fireanalyticstoolbox_provider import FireToolboxProvider
 
-#
-## PART 1
-#
-if platform_system() == "Windows":
-    QgsApplication.setPrefixPath("C:\\PROGRA~1\\QGIS33~1.2", True)
-else:
-    QgsApplication.setPrefixPath("/usr", True)
-qgs = QgsApplication([], False)
-qgs.initQgis()
+    provider = FireToolboxProvider()
+    QgsApplication.processingRegistry().addProvider(provider)
 
-# Append the path where processing plugin can be found
-if platform_system() == "Windows":
-    sys.path.append("C:\\PROGRA~1\\QGIS33~1.2\\apps\\qgis\\python\\plugins")
-else:
-    sys.path.append("/usr/share/qgis/python/plugins")
+    return qgs
 
-import processing
-from processing.core.Processing import Processing
-
-Processing.initialize()
-
-if platform_system() == "Windows":
-    sys.path.append("C:\\Users\\xunxo\\AppData\\Roaming\\QGIS\\QGIS3\\profiles\\default\\python\\plugins")
-else:
-    user = environ["USER"]
-    sys.path.append("/home/" + user + "/.local/share/QGIS/QGIS3/profiles/default/python/plugins/")
-# Add the algorithm provider
-from fireanalyticstoolbox.fireanalyticstoolbox_provider import FireToolboxProvider
-
-provider = FireToolboxProvider()
-QgsApplication.processingRegistry().addProvider(provider)
-
-# print(processing.algorithmHelp("gdal:rasterize"))
 
 from multiprocessing import cpu_count
 
 CPU_COUNT = cpu_count() - 1  # best practice
+import tempfile
+from pathlib import Path
 
 
 def fuels_tif(temp_path, category, output):
