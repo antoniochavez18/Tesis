@@ -5,7 +5,10 @@ from pathlib import Path
 
 
 def simular_crecimiento(
-    area_estudio=Path("test/data_modificada/proto_mod.shp"), id="fid", mid="growth_mid", outfile="bosque_data.csv"
+    area_estudio=Path("test/data_modificada/proto_mod.shp"),
+    id="fid",
+    mid="growth_mid",
+    outfile="bosque_data.csv",
 ):
     """paso 1, simular crecimiento de rodales y crear el bosque
 
@@ -39,7 +42,7 @@ def simular_crecimiento(
 # crear carpete biomass y fuels guardarlas en carpeta cortafuegos
 
 
-def crear_opciones_cortafuegos(gdf, rodales):  # paso 2
+def crear_opciones_cortafuegos(gdf, rodales):
     """paso 2, crear los DPV en valor presente, fuels y biomasa del bosque sin manejo
     inputs:
        - area de estudio (gdf)
@@ -57,8 +60,7 @@ def crear_opciones_cortafuegos(gdf, rodales):  # paso 2
     # os.environ["QT_QPA_PLATFORM"] = "offscreen"
     from post_optimization import base_case
     from simulator import read_toml
-    from use_of_QGIS import (create_protection_value_shp,
-                             fuels_creation_cortafuegos)
+    from use_of_QGIS import create_protection_value_shp, fuels_creation_cortafuegos
 
     config = read_toml("config.toml")  # leer el archivo de configuración
     config_opti = read_toml("config_opti.toml")  # leer el archivo de configuración
@@ -71,7 +73,7 @@ def crear_opciones_cortafuegos(gdf, rodales):  # paso 2
     print("Se han creado los DPV para decidir cortafuegos, se guardan en la carpeta de cortafuegos")
 
 
-def calcular_sensibilidad_cortafuegos():  # paso 3
+def calcular_sensibilidad_cortafuegos():
     """paso 3, crear cortafuegos, calcular la sensibilidad (NPE) de los cortafuegos y guardar el mejor cortafuegos
 
     inputs:
@@ -98,7 +100,12 @@ def calcular_sensibilidad_cortafuegos():  # paso 3
     return str(cortafuego_ganador)
 
 
-def rodales_con_cortafuegos(rodales, cortafuegos, area_estudio = str(Path("test/data_modificada/proto_mod.shp")), area_con_cortafuegos = Path("cortafuegos/data_cortafuegos/data_modificada/proto_mod.shp")):  # paso 4
+def rodales_con_cortafuegos(
+    rodales,
+    cortafuegos,
+    area_estudio=str(Path("test/data_modificada/proto_mod.shp")),
+    area_con_cortafuegos=Path("cortafuegos/data_cortafuegos/data_modificada/proto_mod.shp"),
+):
     """paso 4, crear el paisaje con cortafuegos y calcular la biomasa con cortafuegos
     inputs:
        - rodales (lista de diccionarios con los rodales y sus atributos)
@@ -107,14 +114,13 @@ def rodales_con_cortafuegos(rodales, cortafuegos, area_estudio = str(Path("test/
        - rodales con cortafuegos (lista de diccionarios con los rodales y sus atributos)
     """
     import os
-    from pathlib import Path
 
     from auxiliary import get_data
     from post_optimization import biomass_with_fire_breaks
     from use_of_QGIS import create_paisaje_con_cortafuegos
 
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
-    
+
     create_paisaje_con_cortafuegos(area_estudio, cortafuegos)  # crear paisaje con cortafuegos
     gdf_cf = get_data(area_con_cortafuegos)  # se adquiere el shapefile rodales con cortafuegos
     gdf_cf = gdf_cf.sort_values(by="rid")
@@ -125,7 +131,7 @@ def rodales_con_cortafuegos(rodales, cortafuegos, area_estudio = str(Path("test/
     return rodales_cf, gdf_cf  # leer el paisaje con cortafuegos
 
 
-def optimizar_modelo(rodales, rodales_cf):  # paso 5
+def optimizar_modelo(rodales, rodales_cf):
     """paso 5, optimizar el modelo sin incendios ni cortafuegos y otro sin incendios pero con cortafuegos y crear un csv con las soluciones
     inputs:
        - rodales (lista de diccionarios con los rodales y sus atributos)
@@ -160,7 +166,7 @@ def optimizar_modelo(rodales, rodales_cf):  # paso 5
     return valores_objetivo, valores_objetivo_cf, soluciones, soluciones_cf, prices
 
 
-def quemar_soluciones(rodales, rodales_cf, soluciones, soluciones_cf, gdf, gdf_cf, cortafuegos):  # paso 6 y 7
+def quemar_soluciones(rodales, rodales_cf, soluciones, soluciones_cf, gdf, gdf_cf, cortafuegos):
     """paso 6 y 7, crear los archivos de combustibles, quemar las soluciones y obtener burn probability adaptado a periodo
     inputs:
        - rodales (lista de diccionarios con los rodales y sus atributos)
@@ -266,12 +272,15 @@ def ajustar_ganancias(filter, filtro_cf, bp_sin_cortafuegos, bp_con_cortafuegos,
         indice = indice_con_cortafuegos
 
     print(f"La mejor solución es la solucion {indice + 1} {origen}, y su valor es {mejor_valor}.")
-    return biomass_for_solution, biomass_for_solution_con_cortafuegos, vt_sin_cortafuegos, vt_con_cortafuegos
+    return (
+        biomass_for_solution,
+        biomass_for_solution_con_cortafuegos,
+        vt_sin_cortafuegos,
+        vt_con_cortafuegos,
+    )
 
 
 def main():
-    qgis, processing = init_qgis()
-
     # paso 1: Primero se simula el crecimiento del bosque
     gdf, rodales = simular_crecimiento(mid="id", id="rid")
 
@@ -294,11 +303,12 @@ def main():
     )
 
     # paso 8 y 9w : se elije 1 de las 10 soluciones
-    biomass_for_solution, biomass_for_solution_con_cortafuegos, vt_sin_cortafuegos, vt_con_cortafuegos = (
-        ajustar_ganancias(filter, filtro_cf, bp_sin_cortafuegos, bp_con_cortafuegos, prices)
-    )
-
-    qgis.exitQgis()
+    (
+        biomass_for_solution,
+        biomass_for_solution_con_cortafuegos,
+        vt_sin_cortafuegos,
+        vt_con_cortafuegos,
+    ) = ajustar_ganancias(filter, filtro_cf, bp_sin_cortafuegos, bp_con_cortafuegos, prices)
 
 
 if __name__ == "__main__":

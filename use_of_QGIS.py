@@ -66,8 +66,7 @@ except ImportError:
         sys.path.append(f"/home/{user}/.local/share/QGIS/QGIS3/profiles/default/python/plugins/")
 
     # Add the algorithm provider
-    from fireanalyticstoolbox.fireanalyticstoolbox_provider import \
-        FireToolboxProvider
+    from fireanalyticstoolbox.fireanalyticstoolbox_provider import FireToolboxProvider
 
     provider = FireToolboxProvider()
     # QgsApplication.processingRegistry().addProvider(provider)
@@ -180,7 +179,7 @@ def burn_prob(apath, temp_dir, fire_breaks=None, paisaje=".\\test\\data_base\\pr
     burn_prob = get_data(str(raster_bp["OUTPUT"]))
     burn_prob = burn_prob.fillna(0)
     print("despues de calcular BP")
-    
+
     # Eliminar el archivo temporal .shp
     if temp_output_path.exists():
         temp_output_path.unlink()
