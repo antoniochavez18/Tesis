@@ -261,13 +261,6 @@ def model_t(rodales, politicas, prices, dataset_name):
         for rodal, manejo in sol.keys():
             print(f"Rodal {rodales[rodal]['rid']}, Manejo {politicas[manejo]}")
 
-    # Guardar los valores objetivo en un archivo CSV
-    with open(f"valores_objetivo_{dataset_name}.csv", mode="w", newline="") as file:
-        writer = csv.writer(file)
-        writer.writerow(["Solución", "Valor Objetivo"])
-
-    print(f"Los valores objetivo de las soluciones se han guardado en el archivo valores_objetivo_{dataset_name}.csv.")
-
     # Después de optimizar el modelo, guarda las soluciones en una lista
     solutions = []
     for sol in soluciones:
@@ -344,6 +337,10 @@ def model_t_cplex(rodales, politicas, prices, dataset_name, config, config_opti)
     valores_objetivo = []
 
     mdl = Model(name="forest_optimization")
+    mdl.parameters.mip.tolerances.mipgap = 0.01
+    mdl.parameters.mip.strategy.heuristicfreq = 1
+    mdl.parameters.mip.cuts.covers = -1
+    mdl.parameters.preprocessing.presolve = 1
 
     x = mdl.binary_var_dict(valid_combinations, name="x")
     v = mdl.continuous_var_list(H, name="v")

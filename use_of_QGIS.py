@@ -20,14 +20,12 @@ https://fire2a.github.io/docs/docs/qgis/README.html
 https://gis.stackexchange.com/a/408738
 https://gis.stackexchange.com/a/172849
 """
-
 import tempfile
 from multiprocessing import cpu_count
 from pathlib import Path
 
 import numpy as np
 
-# GLOBALS
 CPU_COUNT = cpu_count() - 1  # best practice
 
 try:
@@ -71,6 +69,7 @@ except ImportError:
     provider = FireToolboxProvider()
     # QgsApplication.processingRegistry().addProvider(provider)
     _qgis_instance.processingRegistry().addProvider(provider)
+
 
 
 def fuels_tif(temp_path, category, output):
@@ -180,7 +179,7 @@ def burn_prob(apath, temp_dir, fire_breaks=None, paisaje=".\\test\\data_base\\pr
     burn_prob = burn_prob.fillna(0)
     print("despues de calcular BP")
 
-    # Eliminar el archivo temporal .shp
+    # test it Eliminar el archivo temporal .shp
     if temp_output_path.exists():
         temp_output_path.unlink()
 
