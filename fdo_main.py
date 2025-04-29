@@ -32,6 +32,6 @@ bp_sin_cortafuegos, bp_con_cortafuegos = quemar_soluciones(
 )
 
 # paso 8 y 9: se adapta ganancias y se elije 1 de las 10 soluciones
-biomass_for_solution, biomass_for_solution_con_cortafuegos, vt_sin_cortafuegos, vt_con_cortafuegos = (
-    ajustar_ganancias(filter, filtro_cf, bp_sin_cortafuegos, bp_con_cortafuegos, prices)
+biomass_for_solution, biomass_for_solution_con_cortafuegos, vt_sin_cortafuegos, vt_con_cortafuegos = ajustar_ganancias(
+    filter, filtro_cf, bp_sin_cortafuegos, bp_con_cortafuegos, prices
 )

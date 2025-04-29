@@ -21,78 +21,62 @@ https://gis.stackexchange.com/a/408738
 https://gis.stackexchange.com/a/172849
 """
 
-
-from qgis.core import QgsApplication
-
-# Global variable to store the QGIS instance
-_qgis_instance = None
-_processing = None
-
-
-def init_qgis():
-    """
-    Initialize QGIS environment and load processing plugin.
-    This function sets up the QGIS application and adds the
-    processing plugin to the QGIS processing registry.
-    It also sets the prefix path for QGIS based on the operating system.
-    """
-    global _qgis_instance, _processing
-
-    if _qgis_instance is None:  # Check if QGIS is already initialized
-        import sys
-        from os import environ
-        from platform import system as platform_system
-
-        # Initialize QGIS
-        if platform_system() == "Windows":
-            QgsApplication.setPrefixPath("C:\\PROGRA~1\\QGIS33~1.2", True)
-        else:
-            QgsApplication.setPrefixPath("/usr", True)
-        _qgis_instance = QgsApplication([], False)
-        _qgis_instance.initQgis()
-
-        # Append the path where processing plugin can be found
-        if platform_system() == "Windows":
-            sys.path.append("C:\\PROGRA~1\\QGIS33~1.2\\apps\\qgis\\python\\plugins")
-        else:
-            sys.path.append("/usr/share/qgis/python/plugins")
-
-        import processing
-
-        _processing = processing
-
-        from processing.core.Processing import Processing
-
-        Processing.initialize()
-
-        # Add user plugins
-        if platform_system() == "Windows":
-            sys.path.append("C:\\Users\\xunxo\\AppData\\Roaming\\QGIS\\QGIS3\\profiles\\default\\python\\plugins")
-        else:
-            user = environ["USER"]
-            sys.path.append(f"/home/{user}/.local/share/QGIS/QGIS3/profiles/default/python/plugins/")
-
-        # Add the algorithm provider
-        from fireanalyticstoolbox.fireanalyticstoolbox_provider import \
-            FireToolboxProvider
-
-        provider = FireToolboxProvider()
-        QgsApplication.processingRegistry().addProvider(provider)
-
-    return _qgis_instance, _processing
-
-
-from multiprocessing import cpu_count
-
-CPU_COUNT = cpu_count() - 1  # best practice
 import tempfile
+from multiprocessing import cpu_count
 from pathlib import Path
+
+import numpy as np
+
+# GLOBALS
+CPU_COUNT = cpu_count() - 1  # best practice
+
+try:
+    import processing
+except ImportError:
+    import sys
+    from os import environ
+    from platform import system as platform_system
+
+    from qgis.core import QgsApplication
+
+    # Initialize QGIS
+    if platform_system() == "Windows":
+        QgsApplication.setPrefixPath("C:\\PROGRA~1\\QGIS33~1.2", True)
+    else:
+        QgsApplication.setPrefixPath("/usr", True)
+    _qgis_instance = QgsApplication([], False)
+    _qgis_instance.initQgis()
+
+    # Append the path where processing plugin can be found
+    if platform_system() == "Windows":
+        sys.path.append("C:\\PROGRA~1\\QGIS33~1.2\\apps\\qgis\\python\\plugins")
+    else:
+        sys.path.append("/usr/share/qgis/python/plugins")
+
+    import processing
+    from processing.core.Processing import Processing
+
+    Processing.initialize()
+
+    # Add user plugins
+    if platform_system() == "Windows":
+        sys.path.append("C:\\Users\\xunxo\\AppData\\Roaming\\QGIS\\QGIS3\\profiles\\default\\python\\plugins")
+    else:
+        user = environ["USER"]
+        sys.path.append(f"/home/{user}/.local/share/QGIS/QGIS3/profiles/default/python/plugins/")
+
+    # Add the algorithm provider
+    from fireanalyticstoolbox.fireanalyticstoolbox_provider import \
+        FireToolboxProvider
+
+    provider = FireToolboxProvider()
+    # QgsApplication.processingRegistry().addProvider(provider)
+    _qgis_instance.processingRegistry().addProvider(provider)
 
 
 def fuels_tif(temp_path, category, output):
     """Crea Raster de combustibles a partir de un shapefile y una columna de categoria."""
-    _qgis_instance, _processing = init_qgis()
-    fuels = _processing.run(
+    fuels = processing.run(
         "gdal:rasterize",
         {
             "BURN": 0,
@@ -126,11 +110,10 @@ def burn_prob(apath, temp_dir, fire_breaks=None, paisaje=".\\test\\data_base\\pr
     Returns:
         DataFrame: DataFrame containing burn probabilities for each rodal.
     """
-    _qgis_instance, _processing = init_qgis()
     print("antes de simular")
     # Crear una nueva ruta para el archivo .shp en el directorio temporal
     temp_output_path = Path(temp_dir) / "mean_bp.shp"
-    result = _processing.run(
+    result = processing.run(
         "fire2a:cell2firesimulator",
         {
             "CbdRaster": None,
@@ -169,7 +152,7 @@ def burn_prob(apath, temp_dir, fire_breaks=None, paisaje=".\\test\\data_base\\pr
         print("eerrrrr")
     print("despues de simular")
     print("antes de procesar")
-    bundle = _processing.run(
+    bundle = processing.run(
         "fire2a:simulationresultsprocessing",
         {
             "BaseLayer": apath,
@@ -323,11 +306,10 @@ def fuels_creation(gdf, filtro, output, config, id="fid"):
 def protection_value(path_fuels, path_biomass):
     """
     Calculate the protection value using the specified fuel and biomass rasters."""
-    _qgis_instance, _processing = init_qgis()
     from fire2a.raster import read_raster
 
     print("antes de simular")
-    result = _processing.run(
+    result = processing.run(
         "fire2a:cell2firesimulator",
         {
             "CbdRaster": None,
@@ -364,7 +346,7 @@ def protection_value(path_fuels, path_biomass):
     res_dic = result["ResultsDirectory"]
     del result
     print("antes de procesar")
-    bundle = _processing.run(
+    bundle = processing.run(
         "fire2a:simulationresultsprocessing",
         {
             "BaseLayer": path_fuels,
@@ -378,7 +360,7 @@ def protection_value(path_fuels, path_biomass):
     messages = "Messages/messages.pickle"
     message_path = str(Path(res_dic) / messages)
     print("antes de calcular DPV")
-    protection = _processing.run(
+    protection = processing.run(
         "fire2a:downstreamprotectionvaluepropagationmetric",
         {
             "NoBurnFill": True,
@@ -475,8 +457,7 @@ def crear_cortafuegos(DPV, capacidad):
     """
     Crea un cortafuegos a partir de la matriz DPV y la capacidad de cortafuegos.
     """
-    _qgis_instance, _processing = init_qgis()
-    cortafuegos = _processing.run(
+    cortafuegos = processing.run(
         "fire2a:rasterknapsack",
         {
             "CUSTOM_OPTIONS_STRING": "",
@@ -507,8 +488,7 @@ def burn_prob_para_sensibilidad(apath, fire_breaks=None):
     Returns:
         DataFrame: DataFrame containing burn probabilities for each rodal.
     """
-    _qgis_instance, _processing = init_qgis()
-    result = _processing.run(
+    result = processing.run(
         "fire2a:cell2firesimulator",
         {
             "CbdRaster": None,
@@ -546,7 +526,7 @@ def burn_prob_para_sensibilidad(apath, fire_breaks=None):
     else:
         print("eerrrrr")
 
-    bundle = _processing.run(
+    bundle = processing.run(
         "fire2a:simulationresultsprocessing",
         {
             "BaseLayer": apath,
@@ -563,9 +543,8 @@ def burn_prob_para_sensibilidad(apath, fire_breaks=None):
 
 
 def raster_calculator(bp, biomass, cortafuegos=None):
-    _qgis_instance, _processing = init_qgis()
     if cortafuegos is None:
-        raster_calc = _processing.run(
+        raster_calc = processing.run(
             "native:rastercalc",
             {
                 "EXPRESSION": '"biomass_base_periodo_0@1" * "BurnProbability@1"',
@@ -574,7 +553,7 @@ def raster_calculator(bp, biomass, cortafuegos=None):
             },
         )
     else:
-        raster_calc = _processing.run(
+        raster_calc = processing.run(
             "native:rastercalc",
             {
                 "EXPRESSION": 'if("OUT_LAYER@1" = 1, "biomass_base_periodo_0@1", "biomass_base_periodo_0@1" * "BurnProbability@1")',
@@ -645,10 +624,9 @@ def sensibilidades_cortafuegos(DPV, capacidades, fuels, biomasa, cordenada):
 
 
 def proyectar_SCR(raster, cordenada):
-    _qgis_instance, _processing = init_qgis()
     from qgis.core import QgsCoordinateReferenceSystem
 
-    proyection = _processing.run(
+    proyection = processing.run(
         "gdal:assignprojection",
         {"CRS": QgsCoordinateReferenceSystem(cordenada), "INPUT": raster},
     )
@@ -656,10 +634,9 @@ def proyectar_SCR(raster, cordenada):
 
 
 def create_paisaje_con_cortafuegos(paisaje, cortafuegos):
-    _qgis_instance, _processing = init_qgis()
     from pathlib import Path
 
-    paisaje_con_cf = _processing.run(
+    paisaje_con_cf = processing.run(
         "native:zonalstatisticsfb",
         {
             "COLUMN_PREFIX": "_",
