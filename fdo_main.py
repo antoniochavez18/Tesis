@@ -18,7 +18,7 @@ crear_opciones_cortafuegos(gdf, rodales)
 cortafuegos = calcular_sensibilidad_cortafuegos()
 
 # 4
-rodales_cf, gdf_cf = rodales_con_cortafuegos(rodales, cortafuegos)
+rodales_cf, gdf_cf = rodales_con_cortafuegos(rodales, cortafuegos, area_estudio=ashape)
 
 # 5
 valores_objetivo, valores_objetivo_cf, soluciones, soluciones_cf, prices = optimizar_modelo(rodales, rodales_cf)

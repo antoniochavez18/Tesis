@@ -98,7 +98,7 @@ def calcular_sensibilidad_cortafuegos():  # paso 3
     return str(cortafuego_ganador)
 
 
-def rodales_con_cortafuegos(rodales, cortafuegos):  # paso 4
+def rodales_con_cortafuegos(rodales, cortafuegos, area_estudio = str(Path("test/data_modificada/proto_mod.shp")), area_con_cortafuegos = Path("cortafuegos/data_cortafuegos/data_modificada/proto_mod.shp")):  # paso 4
     """paso 4, crear el paisaje con cortafuegos y calcular la biomasa con cortafuegos
     inputs:
        - rodales (lista de diccionarios con los rodales y sus atributos)
@@ -114,9 +114,8 @@ def rodales_con_cortafuegos(rodales, cortafuegos):  # paso 4
     from use_of_QGIS import create_paisaje_con_cortafuegos
 
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
-    area_estudio = str(Path("test/data_modificada/proto_mod.shp"))
+    
     create_paisaje_con_cortafuegos(area_estudio, cortafuegos)  # crear paisaje con cortafuegos
-    area_con_cortafuegos = Path("cortafuegos/data_cortafuegos/data_modificada/proto_mod.shp")
     gdf_cf = get_data(area_con_cortafuegos)  # se adquiere el shapefile rodales con cortafuegos
     gdf_cf = gdf_cf.sort_values(by="rid")
 

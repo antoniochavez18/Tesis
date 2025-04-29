@@ -180,6 +180,11 @@ def burn_prob(apath, temp_dir, fire_breaks=None, paisaje=".\\test\\data_base\\pr
     burn_prob = get_data(str(raster_bp["OUTPUT"]))
     burn_prob = burn_prob.fillna(0)
     print("despues de calcular BP")
+    
+    # Eliminar el archivo temporal .shp
+    if temp_output_path.exists():
+        temp_output_path.unlink()
+
     return burn_prob
 
 
@@ -191,7 +196,7 @@ def burn_prob_sol(
     config,
     corta_fuegos=False,
     id="fid",
-    paisaje="test\\data_base\\proto.shp",
+    paisaje=str(Path("test/data_base/proto.shp")),
     cortafuegos=None,
 ):
     """
