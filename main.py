@@ -57,7 +57,8 @@ def crear_opciones_cortafuegos(gdf, rodales):  # paso 2
     # os.environ["QT_QPA_PLATFORM"] = "offscreen"
     from post_optimization import base_case
     from simulator import read_toml
-    from use_of_QGIS import create_protection_value_shp, fuels_creation_cortafuegos
+    from use_of_QGIS import (create_protection_value_shp,
+                             fuels_creation_cortafuegos)
 
     config = read_toml("config.toml")  # leer el archivo de configuración
     config_opti = read_toml("config_opti.toml")  # leer el archivo de configuración
@@ -270,6 +271,8 @@ def ajustar_ganancias(filter, filtro_cf, bp_sin_cortafuegos, bp_con_cortafuegos,
 
 
 def main():
+    qgis, processing = init_qgis()
+
     # paso 1: Primero se simula el crecimiento del bosque
     gdf, rodales = simular_crecimiento(mid="id", id="rid")
 
@@ -295,6 +298,8 @@ def main():
     biomass_for_solution, biomass_for_solution_con_cortafuegos, vt_sin_cortafuegos, vt_con_cortafuegos = (
         ajustar_ganancias(filter, filtro_cf, bp_sin_cortafuegos, bp_con_cortafuegos, prices)
     )
+
+    qgis.exitQgis()
 
 
 if __name__ == "__main__":

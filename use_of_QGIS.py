@@ -21,77 +21,78 @@ https://gis.stackexchange.com/a/408738
 https://gis.stackexchange.com/a/172849
 """
 
-import sys
-import tempfile
-from os import environ
-from pathlib import Path
-from platform import system as platform_system
 
-import numpy as np
 from qgis.core import QgsApplication
 
-# if sys.version_info >= (3, 11):
-#     import tomllib
+# Global variable to store the QGIS instance
+_qgis_instance = None
+_processing = None
 
-#     with open("config.toml", "rb") as f:
-#         config = tomllib.load(f)
-# else:
-#     import toml
 
-#     config = toml.load("config.toml")
+def init_qgis():
+    """
+    Initialize QGIS environment and load processing plugin.
+    This function sets up the QGIS application and adds the
+    processing plugin to the QGIS processing registry.
+    It also sets the prefix path for QGIS based on the operating system.
+    """
+    global _qgis_instance, _processing
 
-# if sys.version_info >= (3, 11):
-#     import tomllib
+    if _qgis_instance is None:  # Check if QGIS is already initialized
+        import sys
+        from os import environ
+        from platform import system as platform_system
 
-#     with open("config_opti.toml", "rb") as f:
-#         config_opti = tomllib.load(f)
-# else:
-#     import toml
+        # Initialize QGIS
+        if platform_system() == "Windows":
+            QgsApplication.setPrefixPath("C:\\PROGRA~1\\QGIS33~1.2", True)
+        else:
+            QgsApplication.setPrefixPath("/usr", True)
+        _qgis_instance = QgsApplication([], False)
+        _qgis_instance.initQgis()
 
-#     config_opti = toml.load("config_opti.toml")
+        # Append the path where processing plugin can be found
+        if platform_system() == "Windows":
+            sys.path.append("C:\\PROGRA~1\\QGIS33~1.2\\apps\\qgis\\python\\plugins")
+        else:
+            sys.path.append("/usr/share/qgis/python/plugins")
 
-#
-## PART 1
-#
-if platform_system() == "Windows":
-    QgsApplication.setPrefixPath("C:\\PROGRA~1\\QGIS33~1.2", True)
-else:
-    QgsApplication.setPrefixPath("/usr", True)
-qgs = QgsApplication([], False)
-qgs.initQgis()
+        import processing
 
-# Append the path where processing plugin can be found
-if platform_system() == "Windows":
-    sys.path.append("C:\\PROGRA~1\\QGIS33~1.2\\apps\\qgis\\python\\plugins")
-else:
-    sys.path.append("/usr/share/qgis/python/plugins")
+        _processing = processing
 
-import processing
-from processing.core.Processing import Processing
+        from processing.core.Processing import Processing
 
-Processing.initialize()
+        Processing.initialize()
 
-if platform_system() == "Windows":
-    sys.path.append("C:\\Users\\xunxo\\AppData\\Roaming\\QGIS\\QGIS3\\profiles\\default\\python\\plugins")
-else:
-    user = environ["USER"]
-    sys.path.append("/home/" + user + "/.local/share/QGIS/QGIS3/profiles/default/python/plugins/")
-# Add the algorithm provider
-from fireanalyticstoolbox.fireanalyticstoolbox_provider import FireToolboxProvider
+        # Add user plugins
+        if platform_system() == "Windows":
+            sys.path.append("C:\\Users\\xunxo\\AppData\\Roaming\\QGIS\\QGIS3\\profiles\\default\\python\\plugins")
+        else:
+            user = environ["USER"]
+            sys.path.append(f"/home/{user}/.local/share/QGIS/QGIS3/profiles/default/python/plugins/")
 
-provider = FireToolboxProvider()
-QgsApplication.processingRegistry().addProvider(provider)
+        # Add the algorithm provider
+        from fireanalyticstoolbox.fireanalyticstoolbox_provider import \
+            FireToolboxProvider
 
-# print(processing.algorithmHelp("gdal:rasterize"))
+        provider = FireToolboxProvider()
+        QgsApplication.processingRegistry().addProvider(provider)
+
+    return _qgis_instance, _processing
+
 
 from multiprocessing import cpu_count
 
 CPU_COUNT = cpu_count() - 1  # best practice
+import tempfile
+from pathlib import Path
 
 
 def fuels_tif(temp_path, category, output):
     """Crea Raster de combustibles a partir de un shapefile y una columna de categoria."""
-    fuels = processing.run(
+    _qgis_instance, _processing = init_qgis()
+    fuels = _processing.run(
         "gdal:rasterize",
         {
             "BURN": 0,
@@ -125,9 +126,11 @@ def burn_prob(apath, temp_dir, fire_breaks=None, paisaje=".\\test\\data_base\\pr
     Returns:
         DataFrame: DataFrame containing burn probabilities for each rodal.
     """
+    _qgis_instance, _processing = init_qgis()
+    print("antes de simular")
     # Crear una nueva ruta para el archivo .shp en el directorio temporal
     temp_output_path = Path(temp_dir) / "mean_bp.shp"
-    result = processing.run(
+    result = _processing.run(
         "fire2a:cell2firesimulator",
         {
             "CbdRaster": None,
@@ -147,7 +150,7 @@ def burn_prob(apath, temp_dir, fire_breaks=None, paisaje=".\\test\\data_base\\pr
             "InstanceDirectory": "TEMPORARY_OUTPUT",
             "InstanceInProject": False,
             "LiveAndDeadFuelMoistureContentScenario": 2,
-            "NumberOfSimulations": 50,
+            "NumberOfSimulations": 5,
             "OtherCliArgs": "",
             "OutputOptions": [1, 2, 3, 4],
             "RandomNumberGeneratorSeed": 123,
@@ -164,8 +167,9 @@ def burn_prob(apath, temp_dir, fire_breaks=None, paisaje=".\\test\\data_base\\pr
         pass
     else:
         print("eerrrrr")
-
-    bundle = processing.run(
+    print("despues de simular")
+    print("antes de procesar")
+    bundle = _processing.run(
         "fire2a:simulationresultsprocessing",
         {
             "BaseLayer": apath,
@@ -175,7 +179,8 @@ def burn_prob(apath, temp_dir, fire_breaks=None, paisaje=".\\test\\data_base\\pr
             "ResultsDirectory": result["ResultsDirectory"],
         },
     )
-
+    print("despues de procesar")
+    print("antes de calcular BP")
     raster_bp = processing.run(
         "native:zonalstatisticsfb",
         {
@@ -191,7 +196,7 @@ def burn_prob(apath, temp_dir, fire_breaks=None, paisaje=".\\test\\data_base\\pr
 
     burn_prob = get_data(str(raster_bp["OUTPUT"]))
     burn_prob = burn_prob.fillna(0)
-
+    print("despues de calcular BP")
     return burn_prob
 
 
@@ -221,41 +226,42 @@ def burn_prob_sol(
     """
     periodos = config["horizonte"]
     bp = []
-    temp_dir = tempfile.TemporaryDirectory()
-    # Crear una nueva ruta para el directorio temporal
-    temp_dir_path = Path(temp_dir.name)
     input_path = Path(input)
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Crear un objeto Path para el archivo temporal .shp
+        # Guardar el GeoDataFrame como un shapefile
+        # Crear una nueva ruta para el directorio temporal
 
-    # Iterar sobre todas las soluciones
-    for s in range(num_soluciones):
-        solucion_bp = []
-        # Iterar sobre todos los periodos para la solución actual
-        for t in range(periodos):
-            # Construir la ruta al archivo utilizando f-strings y Path
-            path_p = input_path / f"fuels_solucion_{s}_periodo_{t}{formato}"
+        # Iterar sobre todas las soluciones
+        for s in range(num_soluciones):
+            solucion_bp = []
+            # Iterar sobre todos los periodos para la solución actual
+            for t in range(periodos):
+                # Construir la ruta al archivo utilizando f-strings y Path
+                path_p = input_path / f"fuels_solucion_{s}_periodo_{t}{formato}"
+                print(f"solucion, {s} y periodo {t}")
+                if path_p.exists():
+                    if corta_fuegos == False:
+                        # Llamar a la función `burn_prob` con la ruta correcta
+                        bp_rodales = burn_prob(str(path_p), str(temp_dir), None, paisaje)
+                    else:
+                        fire_breaks = cortafuegos
+                        bp_rodales = burn_prob(str(path_p), str(temp_dir), fire_breaks, paisaje)
 
-            if path_p.exists():
-                if corta_fuegos == False:
-                    # Llamar a la función `burn_prob` con la ruta correcta
-                    bp_rodales = burn_prob(str(path_p), str(temp_dir_path), None, paisaje)
                 else:
-                    fire_breaks = cortafuegos
-                    bp_rodales = burn_prob(str(path_p), str(temp_dir_path), fire_breaks, paisaje)
+                    print(f"File {path_p} does not exist.")
+                    continue  # Saltar a la siguiente iteración si el archivo no existe
 
-            else:
-                print(f"File {path_p} does not exist.")
-                continue  # Saltar a la siguiente iteración si el archivo no existe
+                bp_periodo = []
+                for r in range(len(filtro[0])):
+                    # Filtrar por el 'fid' de cada rodal y obtener el valor de "_mean"
+                    bp_valor = bp_rodales.loc[bp_rodales[id] == filtro[s][r]["rid"], "_mean"].values
+                    if len(bp_valor) > 0:
+                        bp_periodo.append(bp_valor[0])
+                    else:
+                        bp_periodo.append(None)  # Manejar casos donde no se encuentra el 'fid'
 
-            bp_periodo = []
-            for r in range(len(filtro[0])):
-                # Filtrar por el 'fid' de cada rodal y obtener el valor de "_mean"
-                bp_valor = bp_rodales.loc[bp_rodales[id] == filtro[s][r]["rid"], "_mean"].values
-                if len(bp_valor) > 0:
-                    bp_periodo.append(bp_valor[0])
-                else:
-                    bp_periodo.append(None)  # Manejar casos donde no se encuentra el 'fid'
-
-            solucion_bp.append(bp_periodo)
+                solucion_bp.append(bp_periodo)
 
         # Reorganizar para tener una lista de listas (por rodal) con valores por periodo
         reorganizado = list(map(list, zip(*solucion_bp)))
@@ -286,40 +292,42 @@ def fuels_creation(gdf, filtro, output, config, id="fid"):
     gdf_temp = gdf.copy()
     periodos = config["horizonte"]
     base_dir = Path(output)
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Crear un objeto Path para el archivo temporal .shp
+        # Guardar el GeoDataFrame como un shapefile
+        for s in range(len(filtro)):  # soluciones
+            for t in range(periodos):
+                for r in range(len(filtro[0])):  # rodales
+                    gdf_temp.loc[gdf_temp[id] == filtro[s][r]["rid"], "kitral_cod"] = filtro[s][r]["codigo_kitral"][t]
+                # Directorio base
 
-    for s in range(len(filtro)):  # soluciones
-        for t in range(periodos):
-            for r in range(len(filtro[0])):  # rodales
-                gdf_temp.loc[gdf_temp[id] == filtro[s][r]["rid"], "kitral_cod"] = filtro[s][r]["codigo_kitral"][t]
-            # Directorio base
+                # Crear un objeto Path para el archivo temporal .shp
+                shp_path = Path(temp_dir) / "temp_file.shp"
+                # Guardar el GeoDataFrame como un shapefile
+                gdf_temp.to_file(shp_path)
 
-            temp_dir = tempfile.TemporaryDirectory()
-            # Crear un objeto Path para el archivo temporal .shp
-            shp_path = Path(temp_dir.name) / "temp_file.shp"
-            # Guardar el GeoDataFrame como un shapefile
-            gdf_temp.to_file(shp_path)
+                # Nombre del archivo con variables dinámicas
+                file_name = f"fuels_solucion_{s}_periodo_{t}.tif"
+                # Ruta completa al archivo
 
-            # Nombre del archivo con variables dinámicas
-            file_name = f"fuels_solucion_{s}_periodo_{t}.tif"
-            # Ruta completa al archivo
+                base_path = base_dir / file_name
 
-            base_path = base_dir / file_name
+                # Eliminar el archivo si ya existe para asegurarse de que se reescriba
+                if base_path.exists():
+                    base_path.unlink()
 
-            # Eliminar el archivo si ya existe para asegurarse de que se reescriba
-            if base_path.exists():
-                base_path.unlink()
-
-            fuels_tif(str(shp_path), "kitral_cod", base_path)
+                fuels_tif(str(shp_path), "kitral_cod", base_path)
     print("combustibles en carpeta de soluciones")
 
 
 def protection_value(path_fuels, path_biomass):
     """
     Calculate the protection value using the specified fuel and biomass rasters."""
+    _qgis_instance, _processing = init_qgis()
     from fire2a.raster import read_raster
 
     print("antes de simular")
-    result = processing.run(
+    result = _processing.run(
         "fire2a:cell2firesimulator",
         {
             "CbdRaster": None,
@@ -356,7 +364,7 @@ def protection_value(path_fuels, path_biomass):
     res_dic = result["ResultsDirectory"]
     del result
     print("antes de procesar")
-    bundle = processing.run(
+    bundle = _processing.run(
         "fire2a:simulationresultsprocessing",
         {
             "BaseLayer": path_fuels,
@@ -366,11 +374,11 @@ def protection_value(path_fuels, path_biomass):
             "ResultsDirectory": res_dic,
         },
     )
-    print()
+    print("despues de procesar")
     messages = "Messages/messages.pickle"
     message_path = str(Path(res_dic) / messages)
     print("antes de calcular DPV")
-    protection = processing.run(
+    protection = _processing.run(
         "fire2a:downstreamprotectionvaluepropagationmetric",
         {
             "NoBurnFill": True,
@@ -467,7 +475,8 @@ def crear_cortafuegos(DPV, capacidad):
     """
     Crea un cortafuegos a partir de la matriz DPV y la capacidad de cortafuegos.
     """
-    cortafuegos = processing.run(
+    _qgis_instance, _processing = init_qgis()
+    cortafuegos = _processing.run(
         "fire2a:rasterknapsack",
         {
             "CUSTOM_OPTIONS_STRING": "",
@@ -478,7 +487,7 @@ def crear_cortafuegos(DPV, capacidad):
             "NEOS_SOLVER": "cplex",
             "OUT_LAYER": "TEMPORARY_OUTPUT",
             "RATIO": capacidad,
-            "SOLVER": "cplex: mipgap=0.005 timelimit=300",
+            "SOLVER": "cplex: mipgap=0.005 timelimit=300 MUST SET EXECUTABLE",
             "VALUE": DPV,
             "WEIGHT": None,
         },
@@ -498,7 +507,8 @@ def burn_prob_para_sensibilidad(apath, fire_breaks=None):
     Returns:
         DataFrame: DataFrame containing burn probabilities for each rodal.
     """
-    result = processing.run(
+    _qgis_instance, _processing = init_qgis()
+    result = _processing.run(
         "fire2a:cell2firesimulator",
         {
             "CbdRaster": None,
@@ -536,7 +546,7 @@ def burn_prob_para_sensibilidad(apath, fire_breaks=None):
     else:
         print("eerrrrr")
 
-    bundle = processing.run(
+    bundle = _processing.run(
         "fire2a:simulationresultsprocessing",
         {
             "BaseLayer": apath,
@@ -553,8 +563,9 @@ def burn_prob_para_sensibilidad(apath, fire_breaks=None):
 
 
 def raster_calculator(bp, biomass, cortafuegos=None):
+    _qgis_instance, _processing = init_qgis()
     if cortafuegos is None:
-        raster_calc = processing.run(
+        raster_calc = _processing.run(
             "native:rastercalc",
             {
                 "EXPRESSION": '"biomass_base_periodo_0@1" * "BurnProbability@1"',
@@ -563,7 +574,7 @@ def raster_calculator(bp, biomass, cortafuegos=None):
             },
         )
     else:
-        raster_calc = processing.run(
+        raster_calc = _processing.run(
             "native:rastercalc",
             {
                 "EXPRESSION": 'if("OUT_LAYER@1" = 1, "biomass_base_periodo_0@1", "biomass_base_periodo_0@1" * "BurnProbability@1")',
@@ -623,23 +634,32 @@ def sensibilidades_cortafuegos(DPV, capacidades, fuels, biomasa, cordenada):
     base_path = Path("cortafuegos")
     nombre_archivo = base_path / f"cortafuegos_{capacidades[cortafuego_ganador]}.tif"
     # assert nombre_archivo.is_file()
-    write_raster(data_cortafuego, str(nombre_archivo), "Gtiff", "EPSG:32718", info_cortafuego["Transform"])
+    write_raster(
+        data_cortafuego,
+        str(nombre_archivo),
+        "Gtiff",
+        "EPSG:32718",
+        info_cortafuego["Transform"],
+    )
     return nombre_archivo
 
 
 def proyectar_SCR(raster, cordenada):
+    _qgis_instance, _processing = init_qgis()
     from qgis.core import QgsCoordinateReferenceSystem
 
-    proyection = processing.run(
-        "gdal:assignprojection", {"CRS": QgsCoordinateReferenceSystem(cordenada), "INPUT": raster}
+    proyection = _processing.run(
+        "gdal:assignprojection",
+        {"CRS": QgsCoordinateReferenceSystem(cordenada), "INPUT": raster},
     )
     return proyection["OUTPUT"]
 
 
 def create_paisaje_con_cortafuegos(paisaje, cortafuegos):
+    _qgis_instance, _processing = init_qgis()
     from pathlib import Path
 
-    paisaje_con_cf = processing.run(
+    paisaje_con_cf = _processing.run(
         "native:zonalstatisticsfb",
         {
             "COLUMN_PREFIX": "_",
