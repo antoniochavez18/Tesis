@@ -20,30 +20,30 @@ https://fire2a.github.io/docs/docs/qgis/README.html
 https://gis.stackexchange.com/a/408738
 https://gis.stackexchange.com/a/172849
 """
+import tempfile
+from multiprocessing import cpu_count
+from pathlib import Path
 
+import numpy as np
 
-def init_qgis():
-    """
-    Initialize QGIS environment and load processing plugin.
-    This function sets up the QGIS application and adds the
-    processing plugin to the QGIS processing registry.
-    It also sets the prefix path for QGIS based on the operating system.
-    """
+CPU_COUNT = cpu_count() - 1  # best practice
+
+try:
+    import processing
+except ImportError:
     import sys
     from os import environ
     from platform import system as platform_system
 
     from qgis.core import QgsApplication
 
-    #
-    ## PART 1
-    #
+    # Initialize QGIS
     if platform_system() == "Windows":
         QgsApplication.setPrefixPath("C:\\PROGRA~1\\QGIS33~1.2", True)
     else:
         QgsApplication.setPrefixPath("/usr", True)
-    qgs = QgsApplication([], False)
-    qgs.initQgis()
+    _qgis_instance = QgsApplication([], False)
+    _qgis_instance.initQgis()
 
     # Append the path where processing plugin can be found
     if platform_system() == "Windows":
@@ -51,29 +51,25 @@ def init_qgis():
     else:
         sys.path.append("/usr/share/qgis/python/plugins")
 
+    import processing
     from processing.core.Processing import Processing
 
     Processing.initialize()
 
+    # Add user plugins
     if platform_system() == "Windows":
         sys.path.append("C:\\Users\\xunxo\\AppData\\Roaming\\QGIS\\QGIS3\\profiles\\default\\python\\plugins")
     else:
         user = environ["USER"]
-        sys.path.append("/home/" + user + "/.local/share/QGIS/QGIS3/profiles/default/python/plugins/")
+        sys.path.append(f"/home/{user}/.local/share/QGIS/QGIS3/profiles/default/python/plugins/")
+
     # Add the algorithm provider
     from fireanalyticstoolbox.fireanalyticstoolbox_provider import FireToolboxProvider
 
     provider = FireToolboxProvider()
-    QgsApplication.processingRegistry().addProvider(provider)
+    # QgsApplication.processingRegistry().addProvider(provider)
+    _qgis_instance.processingRegistry().addProvider(provider)
 
-    return qgs
-
-
-from multiprocessing import cpu_count
-
-CPU_COUNT = cpu_count() - 1  # best practice
-import tempfile
-from pathlib import Path
 
 
 def fuels_tif(temp_path, category, output):
@@ -182,6 +178,11 @@ def burn_prob(apath, temp_dir, fire_breaks=None, paisaje=".\\test\\data_base\\pr
     burn_prob = get_data(str(raster_bp["OUTPUT"]))
     burn_prob = burn_prob.fillna(0)
     print("despues de calcular BP")
+
+    # test it Eliminar el archivo temporal .shp
+    if temp_output_path.exists():
+        temp_output_path.unlink()
+
     return burn_prob
 
 
@@ -193,7 +194,7 @@ def burn_prob_sol(
     config,
     corta_fuegos=False,
     id="fid",
-    paisaje="test\\data_base\\proto.shp",
+    paisaje=str(Path("test/data_base/proto.shp")),
     cortafuegos=None,
 ):
     """
