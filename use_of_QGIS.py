@@ -21,29 +21,30 @@ https://gis.stackexchange.com/a/408738
 https://gis.stackexchange.com/a/172849
 """
 
+import tempfile
+from multiprocessing import cpu_count
+from pathlib import Path
 
-def init_qgis():
-    """
-    Initialize QGIS environment and load processing plugin.
-    This function sets up the QGIS application and adds the
-    processing plugin to the QGIS processing registry.
-    It also sets the prefix path for QGIS based on the operating system.
-    """
+import numpy as np
+
+CPU_COUNT = cpu_count() - 1  # best practice
+
+try:
+    import processing
+except ImportError:
     import sys
     from os import environ
     from platform import system as platform_system
 
     from qgis.core import QgsApplication
 
-    #
-    ## PART 1
-    #
+    # Initialize QGIS
     if platform_system() == "Windows":
         QgsApplication.setPrefixPath("C:\\PROGRA~1\\QGIS33~1.2", True)
     else:
         QgsApplication.setPrefixPath("/usr", True)
-    qgs = QgsApplication([], False)
-    qgs.initQgis()
+    _qgis_instance = QgsApplication([], False)
+    _qgis_instance.initQgis()
 
     # Append the path where processing plugin can be found
     if platform_system() == "Windows":
@@ -51,29 +52,24 @@ def init_qgis():
     else:
         sys.path.append("/usr/share/qgis/python/plugins")
 
+    import processing
     from processing.core.Processing import Processing
 
     Processing.initialize()
 
+    # Add user plugins
     if platform_system() == "Windows":
         sys.path.append("C:\\Users\\xunxo\\AppData\\Roaming\\QGIS\\QGIS3\\profiles\\default\\python\\plugins")
     else:
         user = environ["USER"]
-        sys.path.append("/home/" + user + "/.local/share/QGIS/QGIS3/profiles/default/python/plugins/")
+        sys.path.append(f"/home/{user}/.local/share/QGIS/QGIS3/profiles/default/python/plugins/")
+
     # Add the algorithm provider
     from fireanalyticstoolbox.fireanalyticstoolbox_provider import FireToolboxProvider
 
     provider = FireToolboxProvider()
-    QgsApplication.processingRegistry().addProvider(provider)
-
-    return qgs
-
-
-from multiprocessing import cpu_count
-
-CPU_COUNT = cpu_count() - 1  # best practice
-import tempfile
-from pathlib import Path
+    # QgsApplication.processingRegistry().addProvider(provider)
+    _qgis_instance.processingRegistry().addProvider(provider)
 
 
 def fuels_tif(temp_path, category, output):
@@ -122,7 +118,7 @@ def burn_prob(apath, temp_dir, fire_breaks=None, paisaje=".\\test\\data_base\\pr
             "CbhRaster": None,
             "CcfRaster": None,
             "DryRun": False,
-            "ElevationRaster": None,
+            "ElevationRaster": str(Path("./test/elevation_AW3D30_E_30.tif")),
             "EnableCrownFire": False,
             "FireBreaksRaster": fire_breaks,
             "FoliarMoistureContent": 66,
@@ -135,7 +131,7 @@ def burn_prob(apath, temp_dir, fire_breaks=None, paisaje=".\\test\\data_base\\pr
             "InstanceDirectory": "TEMPORARY_OUTPUT",
             "InstanceInProject": False,
             "LiveAndDeadFuelMoistureContentScenario": 2,
-            "NumberOfSimulations": 5,
+            "NumberOfSimulations": 50,
             "OtherCliArgs": "",
             "OutputOptions": [1, 2, 3, 4],
             "RandomNumberGeneratorSeed": 123,
@@ -193,83 +189,67 @@ def burn_prob_sol(
     config,
     corta_fuegos=False,
     id="fid",
-    paisaje="test\\data_base\\proto.shp",
+    paisaje=str(Path("test/data_base/proto.shp")),
     cortafuegos=None,
 ):
     """
     Calculate burn probability for multiple solutions over different periods.
 
-    Args:
-        num_soluciones (int): Number of solutions.
-        formato (str): File format for the input data.
-        filtro (list): List of filters for each solution and period.
-        input (str): Path to the input directory.
-        corta_fuegos (bool, optional): Whether to use fire breaks. Defaults to False.
-
     Returns:
         list: Nested list containing burn probabilities for each solution, rodal, and period.
+              Structure: bp[solución][rodal][periodo]
     """
     periodos = config["horizonte"]
     bp = []
     input_path = Path(input)
-    with tempfile.TemporaryDirectory() as temp_dir:
-        # Crear un objeto Path para el archivo temporal .shp
-        # Guardar el GeoDataFrame como un shapefile
-        # Crear una nueva ruta para el directorio temporal
 
-        # Iterar sobre todas las soluciones
+    with tempfile.TemporaryDirectory() as temp_dir:
         for s in range(num_soluciones):
             solucion_bp = []
-            # Iterar sobre todos los periodos para la solución actual
-            for t in range(periodos):
-                # Construir la ruta al archivo utilizando f-strings y Path
-                path_p = input_path / f"fuels_solucion_{s}_periodo_{t}{formato}"
-                print(f"solucion, {s} y periodo {t}")
-                if path_p.exists():
-                    if corta_fuegos == False:
-                        # Llamar a la función `burn_prob` con la ruta correcta
-                        bp_rodales = burn_prob(str(path_p), str(temp_dir), None, paisaje)
-                    else:
-                        fire_breaks = cortafuegos
-                        bp_rodales = burn_prob(str(path_p), str(temp_dir), fire_breaks, paisaje)
 
+            for t in range(periodos):
+                path_p = input_path / f"fuels_solucion_{s}_periodo_{t}{formato}"
+                print(f"Procesando solución {s}, periodo {t}")
+
+                if not path_p.exists():
+                    print(f"Archivo no existe: {path_p}")
+                    continue
+
+                if not corta_fuegos:
+                    bp_rodales = burn_prob(str(path_p), str(temp_dir), None, paisaje)
                 else:
-                    print(f"File {path_p} does not exist.")
-                    continue  # Saltar a la siguiente iteración si el archivo no existe
+                    fire_breaks = cortafuegos
+                    bp_rodales = burn_prob(str(path_p), str(temp_dir), fire_breaks, paisaje)
 
                 bp_periodo = []
                 for r in range(len(filtro[0])):
-                    # Filtrar por el 'fid' de cada rodal y obtener el valor de "_mean"
-                    bp_valor = bp_rodales.loc[bp_rodales[id] == filtro[s][r]["rid"], "_mean"].values
-                    if len(bp_valor) > 0:
-                        bp_periodo.append(bp_valor[0])
-                    else:
-                        bp_periodo.append(None)  # Manejar casos donde no se encuentra el 'fid'
+                    rid = filtro[s][r]["rid"]
+                    bp_valor = bp_rodales.loc[bp_rodales[id] == rid, "_mean"].values
+                    bp_periodo.append(bp_valor[0] if len(bp_valor) > 0 else None)
 
                 solucion_bp.append(bp_periodo)
 
-        # Reorganizar para tener una lista de listas (por rodal) con valores por periodo
-        reorganizado = list(map(list, zip(*solucion_bp)))
+            # Reorganizar por rodal
+            reorganizado = list(map(list, zip(*solucion_bp)))
 
-        # Calcular el promedio acumulado de cada valor con todos los periodos anteriores para esta solución
-        promedios_solucion = []
-        for fila in reorganizado:
-            promedios_fila = []
-            suma_acumulada = 0  # Para llevar el seguimiento de la suma de valores
-            for i, valor in enumerate(fila):
-                if valor is not None:
-                    suma_acumulada += valor
-                    promedio = suma_acumulada / (i + 1)
-                else:
-                    promedio = None  # Si el valor es None, el promedio también es None
-                promedios_fila.append(promedio)
+            # Calcular promedios acumulados
+            promedios_solucion = []
+            for fila in reorganizado:
+                suma_acumulada = 0
+                promedios_fila = []
+                for i, valor in enumerate(fila):
+                    if valor is not None:
+                        suma_acumulada += valor
+                        promedio = suma_acumulada / (i + 1)
+                    else:
+                        promedio = None
+                    promedios_fila.append(promedio)
+                promedios_solucion.append(promedios_fila)
 
-            promedios_solucion.append(promedios_fila)
+            # Guardar resultados por solución
+            bp.append(promedios_solucion)
 
-        # Guardar los promedios de la solución actual en la lista final
-        bp.append(promedios_solucion)
-
-    return bp  # Devuelve bp[s][r][t] donde s es la solución, r es el rodal y t el periodo
+    return bp
 
 
 def fuels_creation(gdf, filtro, output, config, id="fid"):
