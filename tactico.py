@@ -63,7 +63,7 @@ def no_poli(rodales):
     return no_pol
 
 
-def model_t(rodales, politicas, prices, dataset_name):
+def model_t(rodales, politicas, prices, dataset_name, config, config_opti):
     """Modelo de optimización para maximizar el valor presente neto (NPV) de la venta de biomasa."""
     # Configuraciones y parámetros iniciales
     tasa = config_opti["opti"]["tasa"]
@@ -227,7 +227,7 @@ def model_t(rodales, politicas, prices, dataset_name):
     plt.legend()
     plt.grid(True)
     plt.savefig(f"progreso_valor_objetivo_{dataset_name}.png")
-    plt.show()
+    # plt.show()
 
     # Generar gráfico de la evolución del GAP para todas las soluciones
     plt.figure(figsize=(10, 6))
@@ -240,7 +240,7 @@ def model_t(rodales, politicas, prices, dataset_name):
     plt.legend()
     plt.grid(True)
     plt.savefig(f"evolucion_gap_{dataset_name}.png")
-    plt.show()
+    # plt.show()
 
     # Generar gráfico de v_t * price para las soluciones en valor presente
     plt.figure(figsize=(10, 6))
@@ -253,7 +253,7 @@ def model_t(rodales, politicas, prices, dataset_name):
     plt.legend(title="Soluciones")
     plt.grid(True)
     plt.savefig(f"valores_presentes_por_solucion_{dataset_name}.png")
-    plt.show()
+    # plt.show()
 
     # Imprimir todas las soluciones generadas
     for sol_idx, sol in enumerate(soluciones):
