@@ -1,18 +1,17 @@
 # input usuario
-from auxiliary import get_data, create_forest
-from simulator import generate_forest, generate, write, print_manejos_possibles, read_toml
-from tactico import generate_random_walk_prices, model_t
+from auxiliary import create_forest, get_data
 from post_optimization import (
+    biom_quemada,
     biomass_with_fire_breacks,
     filtro,
-    multiplicar_listas,
-    sumar_por_solucion,
     graficar_vt_por_solucion,
-    grafico_ahora_si,
+    multiplicar_listas,
     prop_quemada,
-    biom_quemada,
+    sumar_por_solucion,
 )
-from use_of_QGIS import fuels_creation, burn_prob_sol
+from simulator import generate, generate_forest, print_manejos_possibles, read_toml, write
+from tactico import generate_random_walk_prices, model_t
+from use_of_QGIS import burn_prob_sol, fuels_creation
 
 # Bajar del gorwth simulator.py, auxiliary.py y tabla.csv
 
@@ -49,7 +48,7 @@ prices = generate_random_walk_prices(
 )  # genera precios aleatorios
 
 # optimiza el modelo sin incendios ni cortafuegos y crea un csv con las soluciones
-valores_objetivo, soluciones = model_t(rodales, politicas, prices, "rodales_sin_cortafuegos")
+valores_objetivo, soluciones = model_t_cplex(rodales, politicas, prices, "rodales_sin_cortafuegos", config, config_opti)
 # optimiza el modelo sinn incendios pero con cortafuegos y crea un csv con las soluciones
 
 valores_objetivo_cf, soluciones_cf = model_t(rodales_cf, politicas, prices, "rodales_con_cortafuegos")
@@ -125,7 +124,7 @@ else:
     origen = "con cortafuegos"
     indice = indice_con_cortafuegos
 
-print(f"La mejor solución es la solucion {indice+1} {origen}, y su valor es {mejor_valor}.")
+print(f"La mejor solución es la solucion {indice + 1} {origen}, y su valor es {mejor_valor}.")
 
 for i in range(5):
     print(biomass_for_solution_con_cortafuegos[i] / valores_objetivo_cf[i])
@@ -165,6 +164,7 @@ print(len(bp_con_cortafuegos[0][0]))  # Should print 10 (number of periods)
 
 import geopandas as gpd
 import numpy as np
+import pandas as pd
 
 # Aquí asumo que tu GeoDataFrame se llama gdf
 # Primer paso: crear la columna "ano" con ceros
@@ -175,7 +175,7 @@ gdf["event"] = np.where(gdf["id"].notna(), "rodal", None)
 
 # Tercer paso: añadir una columna vacía
 gdf["burn_prob"] = None
-
+gdf["vendible"] = np.where(gdf["id"].notna(), "rodal", None)
 # Cuarto paso: duplicar el GeoDataFrame y actualizar "ano"
 duplicados = [gdf.copy() for _ in range(10)]
 for i, dup in enumerate(duplicados):
@@ -195,10 +195,11 @@ for r in range(len(filtro_cf[0])):
         gdf_final.loc[(gdf_final["rid"] == filtro_cf[1][r]["rid"]) & (gdf_final["ano"] == t), "burn_prob"] = (
             bp_con_cortafuegos[1][r][t]
         )
-gdf_final.to_file("C:\Local\Tesis\datos_grafico_gif_QGIS\cf\datos_grafico_gif_QGIS.shp")
+        gdf_final.loc[(gdf_final["rid"] == filtro_cf[1][r]["rid"]) & (gdf_final["ano"] == t), "vendible"] = filtro_cf[
+            1
+        ][r]["vendible"][t]
+gdf_final.to_file("C:\Local\Tesis\datos_grafico_gif_QGIS\cf\datos_grafico_gif_QGIS_2.shp")
 
-
-import numpy as np
 
 # Aquí asumo que tu GeoDataFrame se llama gdf
 # Primer paso: crear la columna "ano" con ceros
@@ -221,12 +222,87 @@ gdf_final = gpd.GeoDataFrame(pd.concat(duplicados, ignore_index=True))
 gdf_final
 
 
-for r in range(len(filter[0])):
-    for t in range(len(filter[0][0]["vendible"])):
-        gdf_final.loc[(gdf_final["rid"] == filter[0][r]["rid"]) & (gdf_final["ano"] == t), "event"] = filter[0][r][
+for r in range(len(filter[3])):
+    for t in range(len(filter[3][0]["vendible"])):
+        gdf_final.loc[(gdf_final["rid"] == filter[3][r]["rid"]) & (gdf_final["ano"] == t), "event"] = filter[3][r][
             "eventos"
         ][t]
-        gdf_final.loc[(gdf_final["rid"] == filter[0][r]["rid"]) & (gdf_final["ano"] == t), "burn_prob"] = (
-            bp_sin_cortafuegos[0][r][t]
+        gdf_final.loc[(gdf_final["rid"] == filter[3][r]["rid"]) & (gdf_final["ano"] == t), "burn_prob"] = (
+            bp_sin_cortafuegos[3][r][t]
         )
-gdf_final.to_file("C:\Local\Tesis\datos_grafico_gif_QGIS\scf\datos_grafico_gif_QGIS_sin_cf.shp")
+
+        gdf_final.loc[(gdf_final["rid"] == filter[1][r]["rid"]) & (gdf_final["ano"] == t), "vendible"] = filter[1][r][
+            "vendible"
+        ][t]
+gdf_final.to_file(
+    Path("C:/Users/xunxo/OneDrive/Escritorio/Tesis/Resultados_area_nueva/QGIS_Data/cf/datos_grafico_gif_QGIS.shp")
+)
+
+
+from pathlib import Path
+
+import geopandas as gpd
+import numpy as np
+import pandas as pd
+
+
+def create_data_QGIS(gdf, filtro, bp, config, config_opti, base_filename):
+    """
+    Crea shapefiles para cada solución, donde cada archivo contiene información por año de:
+    - biomasa vendible
+    - evento (raleo, cosecha, etc.)
+    - probabilidad de quema (burn_prob)
+
+    Args:
+        gdf: GeoDataFrame base
+        filtro: lista de listas con dicts de rodales por solución
+        bp: matriz bp[s][r][t] con probabilidades
+        config: configuración general
+        config_opti: configuración del optimizador (número de soluciones)
+        base_filename: string con la ruta base (sin _sol_s.shp)
+    """
+    horizonte = config["horizonte"]
+    num_soluciones = config_opti["opti"]["soluciones"]
+
+    for s in range(num_soluciones):
+        gdf_temp = gdf.copy()
+        gdf_temp["ano"] = 0
+        gdf_temp["vendible"] = None
+        gdf_temp["event"] = None
+        gdf_temp["burn_prob"] = None
+
+        duplicados = [gdf_temp.copy() for _ in range(horizonte)]
+        for i, dup in enumerate(duplicados):
+            dup["ano"] = i
+
+        gdf_final = gpd.GeoDataFrame(pd.concat(duplicados, ignore_index=True))
+
+        for r in range(len(filtro[s])):
+            rid = filtro[s][r]["rid"]
+            for t in range(horizonte):
+                mask = (gdf_final["fid"] == rid) & (gdf_final["ano"] == t)
+                gdf_final.loc[mask, "event"] = filtro[s][r]["eventos"][t]
+                gdf_final.loc[mask, "burn_prob"] = bp[s][r][t]
+                gdf_final.loc[mask, "vendible"] = filtro[s][r]["vendible"][t]
+
+        filename = Path(f"{base_filename}_sol_{s}.shp")
+        gdf_final.to_file(filename)
+        print(f"Guardado: {filename}")
+
+
+create_data_QGIS(
+    gdf,
+    filter,
+    bp_sin_cortafuegos,
+    config,
+    config_opti,
+    "C:/Users/xunxo/OneDrive/Escritorio/Tesis/Resultados_area_nueva/QGIS_Data/scf/datos_grafico_gif_QGIS",
+)
+create_data_QGIS(
+    gdf_cf,
+    filtro_cf,
+    bp_con_cortafuegos,
+    config,
+    config_opti,
+    "C:/Users/xunxo/OneDrive/Escritorio/Tesis/Resultados_area_nueva/QGIS_Data/cf/datos_grafico_gif_QGIS_cf",
+)

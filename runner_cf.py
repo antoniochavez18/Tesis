@@ -1,10 +1,8 @@
 # input usuario
-from auxiliary import get_data, create_forest
-from simulator import generate_forest, generate
+from auxiliary import create_forest, get_data
 from post_optimization import base_case
-from use_of_QGIS import fuels_creation_cortafuegos, create_protection_value_shp
-import os
-from pathlib import Path
+from simulator import generate, generate_forest
+from use_of_QGIS import create_protection_value_shp, fuels_creation_cortafuegos
 
 # 1 se generan los rodales con maejos
 gdf = get_data(".\\test\\data_modificada\\proto_mod.shp")  # se adquiere el shapefile de los rodales
@@ -31,10 +29,9 @@ create_protection_value_shp()  # qeuma y crea un raster con los DPV en valor pre
 # calculadora raster mirar tesis en punto 4.5.2 formula 4.1 para crear archivos expected_loss
 
 # post optimizacion de cortafuegos para calcular la sensibilidad
-from fire2a.raster import read_raster
 import matplotlib.pyplot as plt
 import numpy as np
-
+from fire2a.raster import read_raster
 
 # Leer los datos de los archivos raster
 expected_loss_uno, _ = read_raster(

@@ -312,8 +312,8 @@ def biom_quemada(filtro, filtro_cf, bp, bp_cf, dataset_name):
             vendible_quemada[s][t] = sum((bp[s][r][t] * filtro[s][r]["vendible"][t]) for r in range(rodales))
             vendible_quemada_cf[s][t] = sum((bp_cf[s][r][t] * filtro_cf[s][r]["vendible"][t]) for r in range(rodales))
 
-    biomasa_total = sum(biomasa_quemada[0][t] for t in range(periodos))
-    vendible_total = sum(vendible_quemada[0][t] for t in range(periodos))
+    biomasa_total = sum(biomasa_quemada[3][t] for t in range(periodos))
+    vendible_total = sum(vendible_quemada[3][t] for t in range(periodos))
     biomasa_total_cf = sum(biomasa_quemada_cf[1][t] for t in range(periodos))
     vendible_total_cf = sum(vendible_quemada_cf[1][t] for t in range(periodos))
 
@@ -383,14 +383,14 @@ def biom_quemada(filtro, filtro_cf, bp, bp_cf, dataset_name):
     # Graficar la biomasa por periodo comparando la solución 1 sin cortafuegos y la solución 3 con cortafuegos
     plt.figure(figsize=(10, 6))
     width = 0.35  # Ancho de las barras
-    plt.bar(periodos_range - width / 2, biomasa_quemada[0], width=width, label="Mejor Solución sin CF", color=colors[0])
+    plt.bar(periodos_range - width / 2, biomasa_quemada[3], width=width, label="Mejor Solución sin CF", color=colors[0])
     plt.bar(
         periodos_range + width / 2, biomasa_quemada_cf[1], width=width, label="Mejor Solución con CF", color=colors[1]
     )
 
     # Agregar segunda "leyenda" con valores específicos
     texto_explicativo = (
-        f"Biomasa total quemada: {biomasa_total:.2f}\n" f"Biomasa total con cortafuegos: {biomasa_total_cf:.2f}"
+        f"Biomasa total quemada: {biomasa_total:.2f}\nBiomasa total con cortafuegos: {biomasa_total_cf:.2f}"
     )
     plt.text(
         0.5,
@@ -414,7 +414,7 @@ def biom_quemada(filtro, filtro_cf, bp, bp_cf, dataset_name):
     # Graficar la biomasa vendible por periodo comparando la solución 1 sin cortafuegos y la solución 3 con cortafuegos
     plt.figure(figsize=(10, 6))
     plt.bar(
-        periodos_range - width / 2, vendible_quemada[0], width=width, label="Mejor Solución sin CF", color=colors[0]
+        periodos_range - width / 2, vendible_quemada[3], width=width, label="Mejor Solución sin CF", color=colors[0]
     )
     plt.bar(
         periodos_range + width / 2, vendible_quemada_cf[1], width=width, label="Mejor Solución con CF", color=colors[1]
@@ -422,7 +422,7 @@ def biom_quemada(filtro, filtro_cf, bp, bp_cf, dataset_name):
 
     # Agregar segunda "leyenda" con valores específicos
     texto_explicativo = (
-        f"Biomasa total quemada: {vendible_total:.2f}\n" f"Biomasa total con cortafuegos: {vendible_total_cf:.2f}"
+        f"Biomasa total quemada: {vendible_total:.2f}\nBiomasa total con cortafuegos: {vendible_total_cf:.2f}"
     )
     plt.text(
         0.95,
@@ -474,7 +474,7 @@ with open("bp_con_cortafuegos.txt", "w") as archivo:
         archivo.write("%s\n" % item)"""
 
 
-def grafico_ahora_si(filtro, filtro_cf, bp, bp_cf, dataset_name):
+def grafico_ahora_si(filtro, filtro_cf, bp, bp_cf, dataset_name, pos_mej_sol, pos_mej_sol_cf):
     rodales = len(bp[0])  # Número de rodales
     periodos = len(bp[0][0])  # Número de periodos
     biomasa_quemada = [0 for _ in range(periodos)]
@@ -497,14 +497,22 @@ def grafico_ahora_si(filtro, filtro_cf, bp, bp_cf, dataset_name):
     prop_resto_cf = [0 for _ in range(periodos)]
 
     for t in range(periodos):
-        biomasa_quemada[t] = sum((bp[0][r][t] * filtro[0][r]["biomass"][t]) for r in range(rodales))
-        vendible_quemada[t] = sum((bp[0][r][t] * filtro[0][r]["vendible"][t]) for r in range(rodales))
-        biomasa_quemada_cf[t] = sum((bp_cf[1][r][t] * filtro_cf[1][r]["biomass"][t]) for r in range(rodales))
-        vendible_quemada_cf[t] = sum((bp_cf[1][r][t] * filtro_cf[1][r]["vendible"][t]) for r in range(rodales))
-        biomasa[t] = sum((filtro[0][r]["biomass"][t]) for r in range(rodales))
-        vendible[t] = sum(((1 - bp[0][r][t]) * filtro[0][r]["vendible"][t]) for r in range(rodales))
-        biomasa_cf[t] = sum((filtro_cf[1][r]["biomass"][t]) for r in range(rodales))
-        vendible_cf[t] = sum(((1 - bp_cf[1][r][t]) * filtro_cf[1][r]["vendible"][t]) for r in range(rodales))
+        biomasa_quemada[t] = sum((bp[pos_mej_sol][r][t] * filtro[pos_mej_sol][r]["biomass"][t]) for r in range(rodales))
+        vendible_quemada[t] = sum(
+            (bp[pos_mej_sol][r][t] * filtro[pos_mej_sol][r]["vendible"][t]) for r in range(rodales)
+        )
+        biomasa_quemada_cf[t] = sum(
+            (bp_cf[pos_mej_sol_cf][r][t] * filtro_cf[pos_mej_sol_cf][r]["biomass"][t]) for r in range(rodales)
+        )
+        vendible_quemada_cf[t] = sum(
+            (bp_cf[pos_mej_sol_cf][r][t] * filtro_cf[pos_mej_sol_cf][r]["vendible"][t]) for r in range(rodales)
+        )
+        biomasa[t] = sum((filtro[pos_mej_sol][r]["biomass"][t]) for r in range(rodales))
+        vendible[t] = sum(((1 - bp[pos_mej_sol][r][t]) * filtro[pos_mej_sol][r]["vendible"][t]) for r in range(rodales))
+        biomasa_cf[t] = sum((filtro_cf[pos_mej_sol_cf][r]["biomass"][t]) for r in range(rodales))
+        vendible_cf[t] = sum(
+            ((1 - bp_cf[pos_mej_sol_cf][r][t]) * filtro_cf[pos_mej_sol_cf][r]["vendible"][t]) for r in range(rodales)
+        )
         resto[t] = biomasa[t] - biomasa_quemada[t] - vendible[t]
         resto_cf[t] = biomasa_cf[t] - biomasa_quemada_cf[t] - vendible_cf[t]
         prop_quemada[t] = biomasa_quemada[t] / biomasa[t] if biomasa[t] > 0 else 0
@@ -618,8 +626,7 @@ def grafico_ahora_si(filtro, filtro_cf, bp, bp_cf, dataset_name):
     plt.legend()
     plt.grid(True)
     texto_explicativo = (
-        f"Biomasa vendible total sin CF: {vendible_total:.2f}\n"
-        f"Biomasa vendible total con CF: {vendible_total_cf:.2f}"
+        f"Biomasa vendible total sin CF: {vendible_total:.2f}\nBiomasa vendible total con CF: {vendible_total_cf:.2f}"
     )
     plt.text(
         0.95,
@@ -686,7 +693,7 @@ def grafico_ahora_si(filtro, filtro_cf, bp, bp_cf, dataset_name):
     )
 
 
-"""(biomasa_quema,vendible_quema,biomasa_quema_cf,vendible_quema_cf,biomasa,vendible,biomasa_cf,vendible_cf,resto,resto_cf) = grafico_ahora_si(f, f2, bp_sin_cortafuegos, bp_con_cortafuegos, "mejor solucion sin y con cortafuegos")
+"""(biomasa_quema,vendible_quema,biomasa_quema_cf,vendible_quema_cf,biomasa,vendible,biomasa_cf,vendible_cf,resto,resto_cf) = grafico_ahora_si(f, f2, bp_sin_cortafuegos, bp_con_cortafuegos, "mejor solucion sin y con cortafuegos",3,1)
 """
 #  1581 biomasa quitada con cortafuegos
 #  81197 biomasa total sin cortafuegos
