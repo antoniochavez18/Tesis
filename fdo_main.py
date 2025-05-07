@@ -12,7 +12,9 @@ from pathlib import Path
 
 from main import (
     ajustar_ganancias,
+    calcular_sensibilidad_cortafuegos,
     crear_combustibles,
+    crear_opciones_cortafuegos,
     optimizar_modelo,
     quemar_soluciones,
     rodales_con_cortafuegos,
@@ -26,10 +28,10 @@ assert ashape.exists()
 gdf, rodales = simular_crecimiento(area_estudio=ashape, id="fid", mid="growth_mid", outfile="bosque_data.csv")
 
 # 2
-# crear_opciones_cortafuegos(gdf, rodales)
+crear_opciones_cortafuegos(gdf, rodales)
 
 # 3
-# cortafuegos = calcular_sensibilidad_cortafuegos()
+cortafuegos = calcular_sensibilidad_cortafuegos()
 cortafuegos = str(Path("cortafuegos/cortafuegos_0.01.tif"))
 # 4
 rodales_cf, gdf_cf = rodales_con_cortafuegos(
