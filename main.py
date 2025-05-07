@@ -91,16 +91,21 @@ def calcular_sensibilidad_cortafuegos():  # paso 3
     from use_of_QGIS import sensibilidades_cortafuegos
 
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
-    cordenada = "EPSG:32718"
+    # cordenada = "EPSG:32718"
     capacidades = [0.01, 0.02, 0.03]
     path_DPV = str(Path("./cortafuegos/protection_value.tif"))
     path_fuels = str(Path("./cortafuegos/fuels/fuels_base_periodo_0.tif"))
     path_biomass = str(Path("./cortafuegos/biomass/biomass_base_periodo_0.tif"))
-    cortafuego_ganador = sensibilidades_cortafuegos(path_DPV, capacidades, path_fuels, path_biomass, cordenada)
+    cortafuego_ganador = sensibilidades_cortafuegos(path_DPV, capacidades, path_fuels, path_biomass)
     return str(cortafuego_ganador)
 
 
-def rodales_con_cortafuegos(rodales, cortafuegos):  # paso 4
+def rodales_con_cortafuegos(
+    rodales,
+    cortafuegos,
+    area_estudio=str(Path("test/data_modificada/proto_mod.shp")),
+    area_con_cortafuegos=str(Path("cortafuegos/data_cortafuegos/data_modificada/proto_mod.shp")),
+):  # paso 4
     """paso 4, crear el paisaje con cortafuegos y calcular la biomasa con cortafuegos
     inputs:
        - rodales (lista de diccionarios con los rodales y sus atributos)
@@ -109,16 +114,13 @@ def rodales_con_cortafuegos(rodales, cortafuegos):  # paso 4
        - rodales con cortafuegos (lista de diccionarios con los rodales y sus atributos)
     """
     import os
-    from pathlib import Path
 
     from auxiliary import get_data
     from post_optimization import biomass_with_fire_breaks
     from use_of_QGIS import create_paisaje_con_cortafuegos
 
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
-    area_estudio = str(Path("test/data_modificada/proto_mod.shp"))
-    create_paisaje_con_cortafuegos(area_estudio, cortafuegos)  # crear paisaje con cortafuegos
-    area_con_cortafuegos = Path("cortafuegos/data_cortafuegos/data_modificada/proto_mod.shp")
+    create_paisaje_con_cortafuegos(area_estudio, cortafuegos, area_con_cortafuegos)  # crear paisaje con cortafuegosc
     gdf_cf = get_data(area_con_cortafuegos)  # se adquiere el shapefile rodales con cortafuegos
     gdf_cf = gdf_cf.sort_values(by="fid")
 
@@ -139,7 +141,7 @@ def optimizar_modelo(rodales, rodales_cf):  # paso 5
        - csv con las soluciones (rodales_sin_cortafuegos.csv y rodales_con_cortafuegos.csv)
     """
     from simulator import print_manejos_possibles, read_toml
-    from tactico import generate_random_walk_prices, model_t
+    from tactico import generate_random_walk_prices, model_t_cplex
 
     config = read_toml("config.toml")  # leer el archivo de configuración
     config_opti = read_toml("config_opti.toml")  # leer el archivo de configuración
@@ -151,10 +153,12 @@ def optimizar_modelo(rodales, rodales_cf):  # paso 5
     )  # genera precios aleatorios
 
     # optimiza el modelo sin incendios ni cortafuegos y crea un csv con las soluciones
-    valores_objetivo, soluciones = model_t(rodales, politicas, prices, "rodales_sin_cortafuegos", config, config_opti)
+    valores_objetivo, soluciones = model_t_cplex(
+        rodales, politicas, prices, "rodales_sin_cortafuegos", config, config_opti
+    )
 
     # optimiza el modelo sinn incendios pero con cortafuegos y crea un csv con las soluciones
-    valores_objetivo_cf, soluciones_cf = model_t(
+    valores_objetivo_cf, soluciones_cf = model_t_cplex(
         rodales_cf, politicas, prices, "rodales_con_cortafuegos", config, config_opti
     )
 
