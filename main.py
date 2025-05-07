@@ -105,6 +105,7 @@ def rodales_con_cortafuegos(
     cortafuegos,
     area_estudio=str(Path("test/data_modificada/proto_mod.shp")),
     area_con_cortafuegos=str(Path("cortafuegos/data_cortafuegos/data_modificada/proto_mod.shp")),
+    cordenada="EPSG:32719",
 ):  # paso 4
     """paso 4, crear el paisaje con cortafuegos y calcular la biomasa con cortafuegos
     inputs:
@@ -117,8 +118,9 @@ def rodales_con_cortafuegos(
 
     from auxiliary import get_data
     from post_optimization import biomass_with_fire_breaks
-    from use_of_QGIS import create_paisaje_con_cortafuegos
+    from use_of_QGIS import create_paisaje_con_cortafuegos, proyectar_SCR
 
+    proyectar_SCR(cortafuegos, cordenada)
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
     create_paisaje_con_cortafuegos(area_estudio, cortafuegos, area_con_cortafuegos)  # crear paisaje con cortafuegosc
     gdf_cf = get_data(area_con_cortafuegos)  # se adquiere el shapefile rodales con cortafuegos
