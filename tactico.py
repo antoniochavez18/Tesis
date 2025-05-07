@@ -346,7 +346,7 @@ def model_t_cplex(rodales, politicas, prices, dataset_name, config, config_opti)
     v = mdl.continuous_var_list(H, name="v")
     y = mdl.continuous_var_list(R, name="y")
 
-    npv = mdl.sum(x[i, j] * prices[t] * a[i][j][t] / (1 + tasa) ** t for (i, j) in valid_combinations for t in H)
+    npv = mdl.sum(sum(x[i, j] * prices[t] * a[i][j][t] / (1 + tasa) ** t for (i, j) in valid_combinations) for t in H)
     mdl.maximize(npv)
 
     mdl.add_constraint(mdl.sum(x[i, j] * C for (i, j) in valid_combinations) <= B)
