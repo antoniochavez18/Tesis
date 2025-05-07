@@ -39,6 +39,7 @@ rodales_cf, gdf_cf = rodales_con_cortafuegos(
     cortafuegos,
     area_estudio=ashape,
     area_con_cortafuegos=str(Path("cortafuegos/data_cortafuegos/data_modificada/proto_mod.shp")),
+    cordenada="EPSG:32719",
 )
 
 # 5
