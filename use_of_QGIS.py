@@ -547,7 +547,7 @@ def raster_calculator(bp, biomass, cortafuegos=None):
     return raster_calc["OUTPUT"]
 
 
-def sensibilidades_cortafuegos(DPV, capacidades, fuels, biomasa, cordenada):
+def sensibilidades_cortafuegos(DPV, capacidades, fuels, biomasa):
     import matplotlib.pyplot as plt
     from fire2a.raster import read_raster, write_raster
 
@@ -558,16 +558,16 @@ def sensibilidades_cortafuegos(DPV, capacidades, fuels, biomasa, cordenada):
         cortafuegos = crear_cortafuegos(DPV, c)
         dir_cortafuegos.append(cortafuegos)
         burn_prob = burn_prob_para_sensibilidad(fuels, cortafuegos)
-        proyectar_SCR(cortafuegos, cordenada)
-        proyectar_SCR(burn_prob, cordenada)
-        proyectar_SCR(fuels, cordenada)
-        proyectar_SCR(biomasa, cordenada)
+        # proyectar_SCR(cortafuegos, cordenada)
+        # proyectar_SCR(burn_prob, cordenada)
+        # proyectar_SCR(fuels, cordenada)
+        # proyectar_SCR(biomasa, cordenada)
         expected_loss_case, _ = read_raster((raster_calculator(burn_prob, biomasa, cortafuegos)), info=False)
         expected_loss_case = np.where(expected_loss_case < 0, 0, expected_loss_case)
         expected_loss.append(np.sum(expected_loss_case))
 
     burn_prob_sin_manejos = burn_prob_para_sensibilidad(fuels)
-    proyectar_SCR(burn_prob_sin_manejos, cordenada)
+    # proyectar_SCR(burn_prob_sin_manejos, cordenada)
     expected_loss_base_case, _ = read_raster((raster_calculator(burn_prob_sin_manejos, biomasa)), info=False)
     expected_loss_base_case = np.where(expected_loss_base_case < 0, 0, expected_loss_base_case)
     EL_base_case = np.sum(expected_loss_base_case)
@@ -615,17 +615,15 @@ def proyectar_SCR(raster, cordenada):
     return proyection["OUTPUT"]
 
 
-def create_paisaje_con_cortafuegos(paisaje, cortafuegos):
-    from pathlib import Path
-
-    paisaje_con_cf = processing.run(
+def create_paisaje_con_cortafuegos(paisaje, cortafuegos, area_con_cortafuegos):
+    zona = processing.run(
         "native:zonalstatisticsfb",
         {
             "COLUMN_PREFIX": "_",
-            "INPUT": paisaje,
+            "INPUT": str(paisaje),
             "INPUT_RASTER": cortafuegos,
-            "OUTPUT": str(Path("cortafuegos/data_cortafuegos/data_modificada/proto_mod.shp")),
+            "OUTPUT": area_con_cortafuegos,
             "RASTER_BAND": 1,
-            "STATISTICS": [2, 6],
+            "STATISTICS": [2],
         },
     )
